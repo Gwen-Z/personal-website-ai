@@ -2,8 +2,8 @@ import { createClient } from '@libsql/client';
 
 // Turso 数据库连接
 const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+  url: process.env.TURSO_DB_URL || process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_TOKEN || process.env.TURSO_AUTH_TOKEN,
 });
 
 // 数据库初始化 - 创建表结构
