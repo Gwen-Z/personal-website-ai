@@ -10,11 +10,5 @@
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }
-  ],
-  "env": {
-    "TURSO_DATABASE_URL": "@turso_database_url",
-    "TURSO_AUTH_TOKEN": "@turso_auth_token",
-    "ANTHROPIC_API_KEY": "@anthropic_api_key",
-    "OPENAI_API_KEY": "@openai_api_key"
-  }
+  ]
 }
