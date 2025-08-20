@@ -1607,7 +1607,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
           r.inspiration_theme !== '无'
         )
         
-        console.log('过滤后的灵感数据:', inspirationRows)
+
         
         // 直接使用真实数据，不添加占位符
         setInspirationData(inspirationRows)
