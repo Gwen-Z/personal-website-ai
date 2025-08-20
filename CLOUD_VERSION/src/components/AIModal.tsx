@@ -82,7 +82,7 @@ export default function AIModal({ isOpen, onClose, context }: AIModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md md:max-w-lg h-[80vh] max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md md:max-w-lg h-[85vh] max-h-[90vh] flex flex-col overflow-hidden">
         {/* 头部 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           {messages.length > 0 ? (
@@ -101,7 +101,7 @@ export default function AIModal({ isOpen, onClose, context }: AIModalProps) {
           )}
           <div className="text-center">
             <h2 className="font-semibold text-gray-900">AI个人助手</h2>
-            <p className="text-xs text-gray-500">已接入 XX模型</p>
+            <p className="text-xs text-gray-500">已接入豆包-lite-32k模型</p>
           </div>
           <button
             onClick={onClose}
@@ -114,37 +114,35 @@ export default function AIModal({ isOpen, onClose, context }: AIModalProps) {
           </button>
         </div>
 
-        {/* AI头像和欢迎语 */}
-        <div className="flex flex-col items-center py-6 px-4">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-400 via-purple-500 to-orange-400 rounded-full flex items-center justify-center mb-4 shadow-lg">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center">
-              <div className="text-2xl">🤖</div>
+        {/* AI助手头像和预设问题 */}
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center py-6 px-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-400 via-purple-500 to-orange-400 rounded-full flex items-center justify-center mb-6 shadow-lg">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                <div className="text-xl">🤖</div>
+              </div>
+            </div>
+            
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">猜你想问</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">根据你的个人历史数据生成</p>
+            
+            {/* 预设问题 */}
+            <div className="space-y-3 w-full">
+              {suggestedQuestions.map((question, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuestionClick(question)}
+                  className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm text-gray-700 transition-colors flex items-center justify-between"
+                >
+                  <span>{question}</span>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
             </div>
           </div>
-          
-          {messages.length === 0 && (
-            <>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">猜你想问</h3>
-              <p className="text-sm text-gray-500 text-center mb-6">根据你的个人历史数据生成</p>
-              
-              {/* 预设问题 */}
-              <div className="space-y-3 w-full">
-                {suggestedQuestions.map((question, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleQuestionClick(question)}
-                    className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm text-gray-700 transition-colors flex items-center justify-between"
-                  >
-                    <span>{question}</span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        )}
 
         {/* 对话区域 */}
         {messages.length > 0 && (
@@ -177,8 +175,8 @@ export default function AIModal({ isOpen, onClose, context }: AIModalProps) {
         )}
 
         {/* 底部输入区 */}
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center space-x-2">
+        <div className="flex-shrink-0 p-4 border-t border-gray-100 bg-white">
+          <div className="flex items-center space-x-2 mb-3">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -202,7 +200,7 @@ export default function AIModal({ isOpen, onClose, context }: AIModalProps) {
           </div>
           
           {/* 底部功能按钮 */}
-          <div className="flex items-center justify-center mt-3 space-x-6">
+          <div className="flex items-center justify-center space-x-6">
             <button className="flex flex-col items-center space-y-1 p-2 hover:bg-gray-50 rounded-lg transition-colors">
               <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
                 <span className="text-xs">📄</span>

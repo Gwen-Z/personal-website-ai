@@ -13,17 +13,18 @@
   "dependencies": {
     "@libsql/client": "^0.5.2",
     "@vercel/node": "^3.0.0",
-    "axios": "^1.6.0",
+    "axios": "^1.11.0",
+    "node-fetch": "^3.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.8.0",
+    "recharts": "^2.15.4",
     "web-vitals": "^3.4.0"
   },
   "devDependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@tailwindcss/container-queries": "^0.1.1",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.5",

@@ -7,6 +7,7 @@ import RawDataPage from './components/RawDataPage.tsx'
 import AIDataPage from './components/AIDataPage.tsx'
 import AIModal from './components/AIModal.tsx'
 import TimelineBubbleChart from './components/TimelineBubbleChart.tsx'
+import DataDashboard from './components/DataDashboard.tsx'
 
 type TabId = 'emotion' | 'life' | 'study' | 'work' | 'inspiration'
 type DataSubTab = 'raw' | 'ai'
@@ -153,11 +154,9 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   const [data, setData] = React.useState<MoodPoint[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const today = new Date()
-    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: sixDaysAgo.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: '2025-08-10',
+      to: '2025-08-16'
     }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
@@ -463,11 +462,9 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
   const [bars, setBars] = React.useState<LifeBar[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const today = new Date()
-    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: sixDaysAgo.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: '2025-08-10',
+      to: '2025-08-16'
     }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
@@ -741,11 +738,9 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   const [studyBars, setStudyBars] = React.useState<StudyBar[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const today = new Date()
-    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: sixDaysAgo.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: '2025-08-10',
+      to: '2025-08-16'
     }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
@@ -1172,11 +1167,9 @@ function WorkCompletion({ onAIClick, ...props }: any) {
   const { data = [], from, to, setFrom, setTo, onQuery, loading } = props;
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const today = new Date()
-    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: sixDaysAgo.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: '2025-08-10',
+      to: '2025-08-16'
     }
   }
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
@@ -1549,11 +1542,9 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
   const [loading, setLoading] = React.useState(false)
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const today = new Date()
-    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: sixDaysAgo.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: '2025-08-10',
+      to: '2025-08-16'
     }
   }
   const [dateRange, setDateRange] = React.useState(getDefaultDateRange())
@@ -1800,7 +1791,7 @@ export default function AnalyticsTabsPage() {
   const [catOpen, setCatOpen] = useState(true)
   const [dataOpen, setDataOpen] = useState(true)
   const [dataActive, setDataActive] = useState<DataSubTab>('raw')
-  const [view, setView] = useState<'category' | 'data'>('category')
+  const [view, setView] = useState<'category' | 'data' | 'dashboard'>('category')
   const [aiModalOpen, setAiModalOpen] = useState(false)
 
   const handleAIClick = () => {
@@ -1869,13 +1860,22 @@ export default function AnalyticsTabsPage() {
         {dataOpen && (
           <nav className="mt-2 space-y-1 pl-6">
             <button
+              onClick={() => setView('dashboard')}
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm min-w-0 ${
+                view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span>📊</span>
+              <span className="whitespace-nowrap">数据仪表板</span>
+            </button>
+            <button
               onClick={() => { setView('data'); setDataActive('raw') }}
               className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm min-w-0 ${
                 view === 'data' && dataActive === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
               <span>📜</span>
-              <span className="whitespace-nowrap">AI处理数据</span>
+              <span className="whitespace-nowrap">原始数据</span>
             </button>
             <button
               onClick={() => { setView('data'); setDataActive('ai') }}
@@ -1884,7 +1884,7 @@ export default function AnalyticsTabsPage() {
               }`}
             >
               <span>🤖</span>
-              <span className="whitespace-nowrap">原始数据</span>
+              <span className="whitespace-nowrap">AI处理数据</span>
             </button>
 
           </nav>
@@ -1892,7 +1892,9 @@ export default function AnalyticsTabsPage() {
       </aside>
 
       <section className="h-full px-0">
-        {view === 'data' ? (
+        {view === 'dashboard' ? (
+          <DataDashboard />
+        ) : view === 'data' ? (
           <>
             {dataActive === 'raw' && <RawDataPage />}
             {dataActive === 'ai' && <AIDataPage />}

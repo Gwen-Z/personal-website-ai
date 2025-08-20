@@ -15,8 +15,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 确保表已初始化
-    await initializeTables();
+    // 确保表已初始化（若缺少环境变量，返回 503 而不是崩溃）
+    try {
+      await initializeTables();
+    } catch (e) {
+      if (e && e.code === 'MISSING_DB_ENV') {
+        return res.status(503).json({ error: '数据库未配置', details: e.message });
+      }
+      throw e;
+    }
 
     const { from, to } = req.query;
     let whereClause = '';

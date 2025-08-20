@@ -1,22 +1,29 @@
-import axios from 'axios';
+// 使用原生 fetch API 替代 axios
 
 class CloudAIService {
   constructor() {
-    // 多重 AI 服务配置
+    // 支持豆包等国内厂商的 OpenAI 兼容配置
+    const provider = process.env.AI_PROVIDER || 'openai'; // 默认用 openai 路径
+    
     this.services = {
       primary: {
+        name: 'openai',
+        apiKey: process.env.OPENAI_API_KEY,
+        baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
+      },
+      secondary: {
         name: 'anthropic',
         apiKey: process.env.ANTHROPIC_API_KEY,
         baseUrl: 'https://api.anthropic.com/v1',
-        model: 'claude-3-sonnet-20240229'
-      },
-      secondary: {
-        name: 'openai',
-        apiKey: process.env.OPENAI_API_KEY,
-        baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-4'
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229'
       }
     };
+
+    // 根据 AI_PROVIDER 调整优先级
+    if (provider === 'anthropic') {
+      [this.services.primary, this.services.secondary] = [this.services.secondary, this.services.primary];
+    }
   }
 
   // 智能路由：选择可用的 AI 服务
@@ -54,78 +61,65 @@ class CloudAIService {
 
   // Anthropic Claude API 调用
   async callAnthropic(service, prompt) {
-    const response = await axios.post(
-      `${service.baseUrl}/messages`,
-      {
+    const response = await fetch(`${service.baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${service.apiKey}`,
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
         model: service.model,
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${service.apiKey}`,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01'
-        }
-      }
-    );
-    
-    return response.data.content[0].text;
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anthropic API 错误: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content[0].text;
   }
 
   // OpenAI GPT API 调用
   async callOpenAI(service, prompt) {
-    const response = await axios.post(
-      `${service.baseUrl}/chat/completions`,
-      {
+    const response = await fetch(`${service.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${service.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         model: service.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 1000
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${service.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    return response.data.choices[0].message.content;
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API 错误 ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   }
 
   // 心情分析
   async analyzeMood(moodDescription) {
-    const prompt = `你是一个情绪分析专家。请严格按照以下规则分析心情描述：
+    const prompt = `仅输出严格 JSON（无多余文本/代码块）：
+{"emoji":"😐","event":"≤10字","score":-3~3整数,"category":"积极/中性/消极"}
+
+规则：
+- score: 3=很开心/获奖, 2=开心, 1=还行, 0=平静, -1=小烦恼, -2=压力/累, -3=难过/生气
+- category: score>0="积极", score=0="中性", score<0="消极"
+- 不确定时用 0/"中性"
 
 心情描述: "${moodDescription}"
 
-情绪分值规则（严格按照）：
-- 开心、非常开心、获奖、比赛获奖 = 3分
-- 平静、平稳、中立、没什么起伏 = 0分  
-- 震惊、朋友分手、意外消息 = 1分
-- 无语、被踩脚、小失望 = -1分
-- 烦、搬家、工作压力 = -2分
-- 疲惫、累、加班 = -2分
-- 伤心、难过、离别 = -3分
-- 生气、错过飞机、愤怒 = -3分
-
-情绪分类规则：
-- 3分 = "积极高"
-- 0分 = "中性"  
-- 1分 = "特殊情"
-- -1分 = "轻度消"
-- -2分 = "中度消" 
-- -3分 = "高强度"
-
-请返回标准JSON格式：
-{
-  "emoji": "准确的emoji符号",
-  "event": "核心事件简述（不超过10字）",
-  "score": 数值分值,
-  "category": "情绪分类"
-}
-
-只返回JSON，无其他内容。`;
+输出:`;
 
     try {
       const response = await this.callWithFallback(prompt, 'mood');
@@ -138,7 +132,16 @@ class CloudAIService {
 
   // 数据综合分析
   async generateAnalysis(records, period = 'all') {
-    const prompt = `请分析以下个人数据记录，生成综合分析报告：
+    const prompt = `输入为多天记录摘要。仅输出 JSON：
+{
+  "summary":"≤80字",
+  "mood_trend":"≤60字",
+  "life_quality":"≤60字",
+  "productivity":"≤60字",
+  "recommendations":["短句1","短句2","短句3"]
+}
+
+用中文、可执行、避免空话。
 
 数据时间范围: ${period}
 记录数量: ${records.length}
@@ -146,21 +149,7 @@ class CloudAIService {
 数据摘要:
 ${this.prepareDataSummary(records)}
 
-请提供以下分析：
-1. 整体趋势分析
-2. 心情变化模式
-3. 生活质量评估
-4. 学习和工作状态
-5. 改进建议
-
-请以JSON格式返回：
-{
-  "summary": "整体摘要",
-  "mood_trend": "心情趋势分析",
-  "life_quality": "生活质量评估",
-  "productivity": "学习工作分析",
-  "recommendations": ["建议1", "建议2", "建议3"]
-}`;
+输出:`;
 
     try {
       const response = await this.callWithFallback(prompt, 'analysis');
@@ -202,8 +191,23 @@ ${historyText ? `历史对话：\n${historyText}` : ''}
 
   // 原始数据处理
   async processRawData(rawData) {
-    const prompt = `请分析以下个人日记数据，为每个维度打分（1-5分，5分最高），并为心情生成合适的emoji：
+    const prompt = `仅输出严格 JSON（无多余文本/代码块）：
+{
+  "date": "YYYY-MM-DD",
+  "mood": 整数0-5,
+  "mood_emoji": "单个emoji",
+  "mood_description": "≤20字",
+  "life": 0-5,
+  "study": 0-5,
+  "work": 0-5,
+  "inspiration": 0-5,
+  "summary": "≤60字"
+}
 
+评分：0=无内容, 1=很差, 2=一般, 3=还行, 4=不错, 5=很好
+缺失信息置 0 或空字符串，禁止编造；保持中文。
+
+数据:
 日期: ${rawData.date}
 心情: ${rawData.mood_text || '无'}
 生活: ${rawData.life_text || '无'}
@@ -211,25 +215,7 @@ ${historyText ? `历史对话：\n${historyText}` : ''}
 工作: ${rawData.work_text || '无'}
 灵感: ${rawData.inspiration_text || '无'}
 
-请按以下JSON格式返回评分结果，只返回JSON，不要其他文字：
-{
-  "date": "${rawData.date}",
-  "mood": 数字评分,
-  "mood_emoji": "表情符号",
-  "mood_description": "心情简短描述",
-  "life": 数字评分,
-  "study": 数字评分,
-  "work": 数字评分,
-  "inspiration": 数字评分,
-  "summary": "简短总结"
-}
-
-评分标准：
-- 心情：根据情绪表达的积极程度，并生成对应emoji
-- 生活：根据生活质量、健康状况、活动丰富度
-- 学习：根据新知识获取、学习成果、技能提升
-- 工作：根据工作进展、机会、成就感
-- 灵感：根据创意想法、洞察、启发的丰富度`;
+输出:`;
 
     try {
       const response = await this.callWithFallback(prompt, 'processing');

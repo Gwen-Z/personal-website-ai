@@ -1,14 +1,26 @@
 import { createClient } from '@libsql/client';
 
-// Turso 数据库连接
-const turso = createClient({
-  url: process.env.DATABASE_URL || process.env.TURSO_DB_URL || process.env.TURSO_DATABASE_URL,
-  authToken: process.env.DATABASE_TOKEN || process.env.TURSO_TOKEN || process.env.TURSO_AUTH_TOKEN,
-});
+// 惰性创建 Turso 客户端，并在缺少环境变量时给出清晰错误
+function getTursoClient() {
+  const url = process.env.DATABASE_URL || process.env.TURSO_DB_URL || process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.DATABASE_TOKEN || process.env.TURSO_TOKEN || process.env.TURSO_AUTH_TOKEN;
+
+  if (!url || !authToken) {
+    const missing = [];
+    if (!url) missing.push('TURSO_DATABASE_URL|TURSO_DB_URL|DATABASE_URL');
+    if (!authToken) missing.push('TURSO_AUTH_TOKEN|TURSO_TOKEN|DATABASE_TOKEN');
+    const err = new Error(`Missing Turso environment variables: ${missing.join(', ')}`);
+    err.code = 'MISSING_DB_ENV';
+    throw err;
+  }
+
+  return createClient({ url, authToken });
+}
 
 // 数据库初始化 - 创建表结构
 export async function initializeTables() {
   try {
+    const turso = getTursoClient();
     // 创建 simple_records 表
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS simple_records (
@@ -83,6 +95,7 @@ export async function initializeTables() {
 // 通用查询函数
 export async function query(sql, params = []) {
   try {
+    const turso = getTursoClient();
     const result = await turso.execute({
       sql,
       args: params
@@ -97,6 +110,7 @@ export async function query(sql, params = []) {
 // 插入数据
 export async function insert(table, data) {
   try {
+    const turso = getTursoClient();
     const columns = Object.keys(data).join(', ');
     const placeholders = Object.keys(data).map(() => '?').join(', ');
     const values = Object.values(data);
@@ -126,8 +140,8 @@ export async function selectAll(table, whereClause = '', params = []) {
   }
 }
 
-// 导出 Turso 客户端（用于复杂查询）
-export { turso };
+// 工具导出：仅在需要时创建客户端
+export { getTursoClient as turso };
 
 // 默认导出初始化函数
 export default initializeTables;
