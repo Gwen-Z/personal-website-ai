@@ -1597,12 +1597,20 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
         const res = await axios.get(`/api/simple-records`, { params })
         const rows = Array.isArray(res.data.records) ? res.data.records : []
         
-        // 筛选有灵感记录的数据
-        const inspirationRows = rows.filter(r => r.inspiration_description && r.inspiration_description.trim() !== '' && r.inspiration_description !== '没想法')
+        // 筛选有灵感记录的数据 - 简化过滤条件
+        const inspirationRows = rows.filter(r => 
+          r.inspiration_description && 
+          r.inspiration_description.trim() !== '' && 
+          r.inspiration_description !== '没想法' &&
+          r.inspiration_description !== '无灵感记录' &&
+          r.inspiration_theme && 
+          r.inspiration_theme !== '无'
+        )
         
-        // 生成完整的7天数据，包含空的占位符
-        const completeWeekData = generateCompleteInspirationWeekData(inspirationRows, dateRange)
-        setInspirationData(completeWeekData)
+        console.log('过滤后的灵感数据:', inspirationRows)
+        
+        // 直接使用真实数据，不添加占位符
+        setInspirationData(inspirationRows)
       } catch (e) {
         console.warn('加载灵感数据失败', e)
         setInspirationData([])
@@ -1700,7 +1708,12 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
           </div>
         </div>
       ) : (
-                 <TimelineBubbleChart data={inspirationData} height={550} />
+                 <TimelineBubbleChart 
+                   data={inspirationData} 
+                   height={550} 
+                   from={dateRange.from} 
+                   to={dateRange.to} 
+                 />
       )}
 
       {/* AI 解读和指标面板 */}
