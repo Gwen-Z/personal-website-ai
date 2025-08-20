@@ -46,11 +46,26 @@ export default async function handler(req, res) {
     sql += ` ORDER BY date DESC, created_at DESC`;
     
     console.log('执行查询:', sql, '参数:', params);
-    const rows = await query(sql, params);
+    const result = await query(sql, params);
     
-    console.log(`✅ 查询成功，返回 ${rows.length} 条原始数据记录`);
+    // 处理Turso查询结果格式 {columns: [...], rows: [...]}
+    let records = [];
+    if (result && result.columns && result.rows) {
+      const columns = result.columns;
+      records = result.rows.map(row => {
+        const record = {};
+        columns.forEach((col, index) => {
+          record[col] = row[index];
+        });
+        return record;
+      });
+    } else if (Array.isArray(result)) {
+      records = result;
+    }
     
-    return res.status(200).json(rows);
+    console.log(`✅ 查询成功，返回 ${records.length} 条原始数据记录`);
+    
+    return res.status(200).json(records);
     
   } catch (error) {
     console.error('获取原始数据失败:', error);
