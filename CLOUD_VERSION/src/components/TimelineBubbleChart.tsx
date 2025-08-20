@@ -51,7 +51,12 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
   // 转换数据为气泡图格式
   const bubbleData = useMemo(() => {
     return data
-      .filter(item => item.inspiration_description && item.inspiration_theme)
+      .filter(item => 
+        item.inspiration_description && 
+        item.inspiration_theme && 
+        item.inspiration_difficulty && // 过滤掉空难度值
+        item.inspiration_difficulty.trim() !== '' // 过滤掉空字符串
+      )
       .map((item, index): BubbleData => {
         // 将日期转换为时间戳用于X轴
         const dateValue = new Date(item.date).getTime();
@@ -124,16 +129,17 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
                   data.difficulty === '高' ? 'bg-indigo-700 text-white' :
                   data.difficulty === '中' ? 'bg-indigo-600 text-white' :
                   data.difficulty === '低' ? 'bg-indigo-400 text-white' :
-                  'bg-indigo-600 text-white'
+                  'bg-gray-500 text-white'
                 }`}
               >
-                {data.difficulty}
+                {data.difficulty || '未知'}
               </span>
             </div>
             <div className="text-xs text-indigo-600">
               {data.difficulty === '高' && '🔥 高难度项目，需要深入技术研发'}
               {data.difficulty === '中' && '⚡ 中等难度，平衡创新与可行性'}
               {data.difficulty === '低' && '✨ 低难度项目，易于快速实现'}
+              {(!data.difficulty || data.difficulty.trim() === '') && '❓ 难度待评估'}
             </div>
           </div>
           
