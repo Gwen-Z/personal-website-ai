@@ -110,7 +110,9 @@ export default function RawDataPage() {
       if (from) params.from = from
       if (to) params.to = to
       const { data } = await axios.get(`/api/simple-records`, { params })
-      setItems(Array.isArray(data) ? data : [])
+      // API返回 {records: [...], stats: {...}} 格式
+      const records = data?.records || data || []
+      setItems(Array.isArray(records) ? records : [])
     } catch (error) {
       console.error('加载原始数据失败:', error)
       setItems([]) // 设置为空数组避免渲染错误
