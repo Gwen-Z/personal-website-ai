@@ -41,22 +41,29 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
   // 主题类别映射到Y轴位置（大幅增加间距以容纳大气泡）
   const themeCategories = useMemo(() => {
     const themes = [...new Set(data.map(item => item.inspiration_theme).filter(Boolean))];
-    return themes.reduce((acc, theme, index) => {
+    console.log('所有主题:', themes);
+    const categories = themes.reduce((acc, theme, index) => {
       // 使用间距为4的等距分布，从4开始，确保大气泡不重叠
       acc[theme] = (index + 1) * 4;
       return acc;
     }, {} as Record<string, number>);
+    console.log('主题Y轴映射:', categories);
+    return categories;
   }, [data]);
 
   // 转换数据为气泡图格式
   const bubbleData = useMemo(() => {
-    return data
+    console.log('TimelineBubbleChart 原始数据:', data);
+    const filteredData = data
       .filter(item => 
         item.inspiration_description && 
         item.inspiration_theme && 
         item.inspiration_difficulty && // 过滤掉空难度值
         item.inspiration_difficulty.trim() !== '' // 过滤掉空字符串
-      )
+      );
+    console.log('TimelineBubbleChart 过滤后数据:', filteredData);
+    
+    return filteredData
       .map((item, index): BubbleData => {
         // 将日期转换为时间戳用于X轴
         const dateValue = new Date(item.date).getTime();
@@ -96,7 +103,7 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
             color = '#6366f1'; // 默认 indigo-600
         }
         
-        return {
+        const bubblePoint = {
           x: dateValue,
           y: yValue,
           z: bubbleSize, // 直接使用根据难度计算的气泡大小
@@ -107,6 +114,8 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
           description: item.inspiration_description,
           color
         };
+        console.log('生成气泡点:', bubblePoint);
+        return bubblePoint;
       });
   }, [data, themeCategories]);
 
