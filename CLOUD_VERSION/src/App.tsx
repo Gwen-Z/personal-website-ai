@@ -303,7 +303,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data) ? res.data : []
+        const rows = Array.isArray(res.data.records) ? res.data.records : []
         
         const pointsByDate: MoodPoint[] = rows
           .filter((r: any) => r.mood_description && r.mood_description.trim() !== '') // 只要有情绪描述的记录
@@ -602,7 +602,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data) ? res.data : []
+        const rows = Array.isArray(res.data.records) ? res.data.records : []
 
         const mapped: LifeBar[] = rows
           .filter((r: any) => r.fitness_calories || r.fitness_duration) // 只要有健身数据的记录
@@ -881,7 +881,7 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data) ? res.data : []
+        const rows = Array.isArray(res.data.records) ? res.data.records : []
 
         // 处理学习数据，支持同一天多个学习记录
         const studyRecords = rows
@@ -1234,7 +1234,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data) ? res.data : []
+        const rows = Array.isArray(res.data.records) ? res.data.records : []
 
         // 处理工作数据
         const workRecords = rows
@@ -1595,7 +1595,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data) ? res.data : []
+        const rows = Array.isArray(res.data.records) ? res.data.records : []
         
         // 筛选有灵感记录的数据
         const inspirationRows = rows.filter(r => r.inspiration_description && r.inspiration_description.trim() !== '' && r.inspiration_description !== '没想法')
