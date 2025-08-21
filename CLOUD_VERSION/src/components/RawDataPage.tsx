@@ -376,7 +376,13 @@ export default function RawDataPage() {
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <div className="font-medium">AI处理数据列表（显示：{catLabel(category)}）</div>
           <div className="flex items-center gap-3">
-            <button onClick={batchDelete} className="h-8 rounded-xl border text-sm px-3" disabled={selected.size === 0}>批量删除</button>
+            <button 
+              onClick={batchDelete} 
+              className="h-8 rounded-xl border text-sm px-3 transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
+              disabled={selected.size === 0}
+            >
+              批量删除
+            </button>
             <div className="text-sm text-slate-500">{loading ? '加载中...' : `共 ${displayed.length} 条`}</div>
           </div>
         </div>
