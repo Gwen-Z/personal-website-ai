@@ -7,7 +7,6 @@ import RawDataPage from './components/RawDataPage.tsx'
 import AIDataPage from './components/AIDataPage.tsx'
 import AIModal from './components/AIModal.tsx'
 import TimelineBubbleChart from './components/TimelineBubbleChart.tsx'
-import DataDashboard from './components/DataDashboard.tsx'
 
 type TabId = 'emotion' | 'life' | 'study' | 'work' | 'inspiration'
 type DataSubTab = 'raw' | 'ai'
@@ -1804,7 +1803,7 @@ export default function AnalyticsTabsPage() {
   const [catOpen, setCatOpen] = useState(true)
   const [dataOpen, setDataOpen] = useState(true)
   const [dataActive, setDataActive] = useState<DataSubTab>('raw')
-  const [view, setView] = useState<'category' | 'data' | 'dashboard'>('category')
+  const [view, setView] = useState<'category' | 'data'>('category')
   const [aiModalOpen, setAiModalOpen] = useState(false)
 
   const handleAIClick = () => {
@@ -1873,15 +1872,6 @@ export default function AnalyticsTabsPage() {
         {dataOpen && (
           <nav className="mt-2 space-y-1 pl-6">
             <button
-              onClick={() => setView('dashboard')}
-              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm min-w-0 ${
-                view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>📊</span>
-              <span className="whitespace-nowrap">数据仪表板</span>
-            </button>
-            <button
               onClick={() => { setView('data'); setDataActive('raw') }}
               className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm min-w-0 ${
                 view === 'data' && dataActive === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
@@ -1905,9 +1895,7 @@ export default function AnalyticsTabsPage() {
       </aside>
 
       <section className="h-full px-0">
-        {view === 'dashboard' ? (
-          <DataDashboard />
-        ) : view === 'data' ? (
+        {view === 'data' ? (
           <>
             {dataActive === 'raw' && <AIDataPage />}
             {dataActive === 'ai' && <RawDataPage />}
