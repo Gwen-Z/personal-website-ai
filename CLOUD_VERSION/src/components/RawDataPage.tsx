@@ -336,88 +336,93 @@ export default function RawDataPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-slate-600 border-b">
-                <th className="px-4 py-2"><input type="checkbox" checked={allChecked} onChange={e=>toggleAll(e.target.checked)} /></th>
-                <th className="px-4 py-2">日期</th>
-                <th className="px-4 py-2">{catDescLabel(category)}</th>
+              <tr className="text-left text-slate-600 border-b bg-slate-50">
+                <th className="px-3 py-2 whitespace-nowrap"><input type="checkbox" checked={allChecked} onChange={e=>toggleAll(e.target.checked)} /></th>
+                <th className="px-3 py-2 whitespace-nowrap">日期</th>
+                <th className="px-3 py-2 whitespace-nowrap">{catDescLabel(category)}</th>
                 {category === 'mood' && (
                   <>
-                    <th className="px-4 py-2">Emoji(AI总结)</th>
-                    <th className="px-4 py-2">心情事件(AI总结)</th>
-                    <th className="px-4 py-2">分值(AI总结)</th>
-                    <th className="px-4 py-2">分类(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">Emoji(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">心情事件(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">分值(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">分类(AI总结)</th>
                   </>
                 )}
                 {category === 'life' && (
                   <>
-                    <th className="px-4 py-2">强度(AI总结)</th>
-                    <th className="px-4 py-2">运动总时间(AI总结)</th>
-                    <th className="px-4 py-2">运动消耗预估(AI总结)</th>
-                    <th className="px-4 py-2">运动种类(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">强度(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">运动总时间(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">运动消耗预估(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">运动种类(AI总结)</th>
                   </>
                 )}
                 {category === 'study' && (
                   <>
-                    <th className="px-4 py-2">学习时长(AI总结)</th>
-                    <th className="px-4 py-2">类别(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">学习时长(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">类别(AI总结)</th>
                   </>
                 )}
                 {category === 'work' && (
                   <>
-                    <th className="px-4 py-2">类型(AI总结)</th>
-                    <th className="px-4 py-2">优先级(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">类型(AI总结)</th>
+                    <th className="px-3 py-2 whitespace-nowrap">优先级(AI总结)</th>
                   </>
                 )}
                 {category === 'inspiration' && (
                   <>
-                    <th className="px-4 py-2">主题（AI提炼）</th>
-                    <th className="px-4 py-2">潜在产品形态（AI总结）</th>
-                    <th className="px-4 py-2">难度（AI总结）</th>
+                    <th className="px-3 py-2 whitespace-nowrap">主题（AI提炼）</th>
+                    <th className="px-3 py-2 whitespace-nowrap">潜在产品形态（AI总结）</th>
+                    <th className="px-3 py-2 whitespace-nowrap">难度（AI总结）</th>
                   </>
                 )}
-                <th className="px-4 py-2">操作</th>
+                <th className="px-3 py-2 whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody>
               {displayed.map(item => (
-                <tr key={item.id} className="border-b last:border-0">
-                  <td className="px-4 py-2"><input type="checkbox" checked={selected.has(item.id)} onChange={e=>toggle(item.id, e.target.checked)} /></td>
-                  <td className="px-4 py-2 whitespace-nowrap">
+                <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50">
+                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(item.id)} onChange={e=>toggle(item.id, e.target.checked)} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">
                     {editingId === item.id ? (
-                      <input type="date" value={editing.date as string} onChange={e=>setEditing(prev=>({...prev, date: e.target.value}))} className="h-8 rounded border px-2" />
+                      <input type="date" value={editing.date as string} onChange={e=>setEditing(prev=>({...prev, date: e.target.value}))} className="h-7 rounded border px-2 text-xs" />
                     ) : item.date}
                   </td>
-                  <td className="px-4 py-2 max-w-[420px]">
+                  <td className="px-3 py-2 max-w-[300px] text-xs">
                     {editingId === item.id ? (
                       <input 
                         type="text" 
                         value={editing[`${category}_description` as keyof SimpleRecordItem] as string || ''} 
                         onChange={e=>setEditing(prev=>({...prev, [`${category}_description`]: e.target.value}))} 
-                        className="h-8 w-full rounded border px-2" 
+                        className="h-7 w-full rounded border px-2 text-xs" 
                       />
                     ) : (
-                      <span className="truncate inline-block max-w-full" title={item[`${category}_description` as keyof SimpleRecordItem] as string}>
+                      <div 
+                        className="truncate cursor-help" 
+                        title={item[`${category}_description` as keyof SimpleRecordItem] as string}
+                      >
                         {item[`${category}_description` as keyof SimpleRecordItem] as string}
-                      </span>
+                      </div>
                     )}
                   </td>
                   {category === 'mood' && (
                     <>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-lg">{item.mood_emoji || '😐'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-sm">{item.mood_emoji || '😐'}</span>
                       </td>
-                      <td className="px-4 py-2">
-                        <span className="text-sm text-slate-600">{item.mood_event || '无事件'}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-600" title={item.mood_event || '无事件'}>
+                          {item.mood_event || '无事件'}
+                        </span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`text-sm font-medium ${(item.mood_score || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`text-xs font-medium ${(item.mood_score || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {item.mood_score !== undefined ? item.mood_score : 0}
                         </span>
                       </td>
-                      <td className="px-4 py-2">
-                        <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">
+                      <td className="px-3 py-2">
+                        <span className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
                           {item.mood_category || '未分类'}
                         </span>
                       </td>
@@ -425,34 +430,34 @@ export default function RawDataPage() {
                   )}
                   {category === 'life' && (
                     <>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.fitness_intensity || '中强度'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.fitness_intensity || '中强度'}</span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.fitness_duration || '30分钟'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.fitness_duration || '30分钟'}</span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.fitness_calories || '200卡'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.fitness_calories || '200卡'}</span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.fitness_type || '综合训练'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.fitness_type || '综合训练'}</span>
                       </td>
                     </>
                   )}
                   {category === 'study' && (
                     <>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.study_duration || '未提及'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.study_duration || '未提及'}</span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.study_category || '其他'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.study_category || '其他'}</span>
                       </td>
                     </>
                   )}
                   {category === 'work' && (
                     <>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                           item.work_task_type === '规划' ? 'bg-blue-100 text-blue-800' :
                           item.work_task_type === '开发' ? 'bg-green-100 text-green-800' :
                           item.work_task_type === 'UI/UX设计' ? 'bg-purple-100 text-purple-800' :
@@ -464,8 +469,8 @@ export default function RawDataPage() {
                           {item.work_task_type || '开发'}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                           item.work_priority === '高' ? 'bg-red-100 text-red-800' :
                           item.work_priority === '中' ? 'bg-yellow-100 text-yellow-800' :
                           item.work_priority === '低' ? 'bg-green-100 text-green-800' :
@@ -478,16 +483,16 @@ export default function RawDataPage() {
                   )}
                   {category === 'inspiration' && (
                     <>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-sm text-slate-600">{item.inspiration_theme || '—'}</span>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs text-slate-600">{item.inspiration_theme || '—'}</span>
                       </td>
-                      <td className="px-4 py-2 max-w-[320px]">
-                        <span className="text-sm text-slate-600" title={item.inspiration_product || '—'}>
+                      <td className="px-3 py-2 max-w-[200px]">
+                        <div className="text-xs text-slate-600 truncate cursor-help" title={item.inspiration_product || '—'}>
                           {item.inspiration_product || '—'}
-                        </span>
+                        </div>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                           item.inspiration_difficulty === '高' ? 'bg-red-100 text-red-800' :
                           item.inspiration_difficulty === '中' ? 'bg-yellow-100 text-yellow-800' :
                           item.inspiration_difficulty === '低' ? 'bg-green-100 text-green-800' :
@@ -498,23 +503,23 @@ export default function RawDataPage() {
                       </td>
                     </>
                   )}
-                  <td className="px-4 py-2 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     {editingId === item.id ? (
                       <>
-                        <button className="h-8 rounded bg-indigo-600 text-white px-3 mr-2" onClick={()=>saveEdit(item.id)}>保存</button>
-                        <button className="h-8 rounded border px-3" onClick={()=>{setEditingId(null); setEditing({})}}>取消</button>
+                        <button className="h-7 rounded bg-indigo-600 text-white px-2 mr-1 text-xs" onClick={()=>saveEdit(item.id)}>保存</button>
+                        <button className="h-7 rounded border px-2 text-xs" onClick={()=>{setEditingId(null); setEditing({})}}>取消</button>
                       </>
                     ) : (
                       <>
-                        <button className="h-8 rounded border px-3 mr-2" onClick={()=>startEdit(item)}>编辑</button>
-                        <button className="h-8 rounded border px-3" onClick={()=>remove(item.id)}>删除</button>
+                        <button className="h-7 rounded border px-2 mr-1 text-xs" onClick={()=>startEdit(item)}>编辑</button>
+                        <button className="h-7 rounded border px-2 text-xs" onClick={()=>remove(item.id)}>删除</button>
                       </>
                     )}
                   </td>
                 </tr>
               ))}
               {!displayed.length && (
-                <tr><td className="px-4 py-6 text-slate-500" colSpan={category === 'mood' ? 8 : category === 'life' ? 8 : category === 'study' ? 6 : category === 'work' ? 6 : category === 'inspiration' ? 7 : 4}>暂无数据</td></tr>
+                <tr><td className="px-3 py-6 text-slate-500 text-xs text-center" colSpan={category === 'mood' ? 8 : category === 'life' ? 8 : category === 'study' ? 6 : category === 'work' ? 6 : category === 'inspiration' ? 7 : 4}>暂无数据</td></tr>
               )}
             </tbody>
           </table>
