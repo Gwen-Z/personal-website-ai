@@ -1909,8 +1909,8 @@ export default function AnalyticsTabsPage() {
           <DataDashboard />
         ) : view === 'data' ? (
           <>
-            {dataActive === 'raw' && <RawDataPage />}
-            {dataActive === 'ai' && <AIDataPage />}
+            {dataActive === 'raw' && <AIDataPage />}
+            {dataActive === 'ai' && <RawDataPage />}
           </>
         ) : (
           <>
