@@ -29,6 +29,8 @@ export default function AIDataPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editing, setEditing] = useState<Partial<RawTextItem>>({})
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   async function load() {
     setLoading(true)
@@ -69,7 +71,8 @@ export default function AIDataPage() {
     setAdding(true)
     try {
       const rawText = `日期：${newEntry.date}\n${newEntry.description}`
-      await axios.post('/api/parse-raw-text', { raw_text: rawText })
+      // 对应后端实际存在的接口文件 api/raw-entry.js
+      await axios.post('/api/raw-entry', { raw_text: rawText })
       setNewEntry({
         date: new Date().toISOString().slice(0, 10),
         description: ''
@@ -77,7 +80,7 @@ export default function AIDataPage() {
       await load()
     } catch (error: any) {
       console.error('添加数据失败:', error)
-      alert('添加失败：' + (error.response?.data?.message || error.message))
+      alert('添加失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
     } finally {
       setAdding(false)
     }
@@ -97,15 +100,50 @@ export default function AIDataPage() {
       work_text: editing.work_text || '',
       inspiration_text: editing.inspiration_text || '',
     }
-    await axios.put(`/api/raw-entries/${id}`, body)
-    setEditingId(null)
-    setEditing({})
-    await load()
+    const prev = items
+    const optimistic = items.map(i => i.id === id ? {
+      ...i,
+      date: String(body.date || i.date),
+      mood_text: body.mood_text,
+      fitness_text: body.fitness_text,
+      study_text: body.study_text,
+      work_text: body.work_text,
+      inspiration_text: body.inspiration_text,
+    } : i)
+    setSavingId(id)
+    setItems(optimistic)
+    try {
+      await axios.put(`/api/raw-entries/${id}`, body)
+      setEditingId(null)
+      setEditing({})
+    } catch (error: any) {
+      setItems(prev)
+      console.error('保存编辑失败:', error)
+      alert('保存失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+    } finally {
+      setSavingId(null)
+    }
   }
 
   async function remove(id: number) {
-    await axios.delete(`/api/raw-entries/${id}`)
-    await load()
+    if (!window.confirm('确认删除这条原始记录吗？此操作不可撤销。')) return
+    const prev = items
+    const optimistic = items.filter(i => i.id !== id)
+    setDeletingId(id)
+    setItems(optimistic)
+    try {
+      await axios.delete(`/api/raw-entries/${id}`)
+      if (editingId === id) {
+        setEditingId(null)
+        setEditing({})
+      }
+    } catch (error: any) {
+      setItems(prev)
+      console.error('删除失败:', error)
+      alert('删除失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -230,13 +268,27 @@ export default function AIDataPage() {
                   <td className="px-4 py-2 whitespace-nowrap">
                     {editingId === item.id ? (
                       <>
-                        <button className="h-8 rounded bg-indigo-600 text-white px-3 mr-2" onClick={()=>saveEdit(item.id)}>保存</button>
-                        <button className="h-8 rounded border px-3" onClick={()=>{setEditingId(null); setEditing({})}}>取消</button>
+                        <button className="h-8 rounded bg-indigo-600 text-white px-3 mr-2" onClick={()=>saveEdit(item.id)} disabled={savingId === item.id}>
+                          {savingId === item.id ? '保存中...' : '保存'}
+                        </button>
+                        <button className="h-8 rounded border px-3" onClick={()=>{setEditingId(null); setEditing({})}} disabled={savingId === item.id}>取消</button>
                       </>
                     ) : (
                       <>
-                        <button className="h-8 rounded border px-3 mr-2" onClick={()=>startEdit(item)}>编辑</button>
-                        <button className="h-8 rounded border px-3" onClick={()=>remove(item.id)}>删除</button>
+                        <button 
+                          className="h-8 rounded border px-3 mr-2 transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          onClick={()=>startEdit(item)} 
+                          disabled={deletingId === item.id}
+                        >
+                          编辑
+                        </button>
+                        <button 
+                          className="h-8 rounded border px-3 transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          onClick={()=>remove(item.id)} 
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id ? '删除中...' : '删除'}
+                        </button>
                       </>
                     )}
                   </td>

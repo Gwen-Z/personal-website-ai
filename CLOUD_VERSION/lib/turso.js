@@ -61,16 +61,44 @@ export async function initializeTables() {
       )
     `);
 
-    // 创建 raw_entries 表
+    // 创建 raw_entries 表（包含页面/接口使用到的列）
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS raw_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
-        raw_text TEXT NOT NULL,
-        processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        mood_text TEXT,
+        fitness_text TEXT,
+        study_text TEXT,
+        work_text TEXT,
+        inspiration_text TEXT,
+        raw_text TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        processed_at DATETIME,
         source TEXT DEFAULT 'shortcut'
       )
     `);
+
+    // 兼容已有旧表结构：补齐缺失的列
+    try {
+      const info = await turso.execute(`PRAGMA table_info(raw_entries)`);
+      const existingCols = new Set((info.rows || []).map(r => r[1]));
+      const ensureColumn = async (col, type) => {
+        if (!existingCols.has(col)) {
+          try { await turso.execute(`ALTER TABLE raw_entries ADD COLUMN ${col} ${type}`); } catch (e) { /* ignore */ }
+        }
+      };
+      await ensureColumn('mood_text', 'TEXT');
+      await ensureColumn('fitness_text', 'TEXT');
+      await ensureColumn('study_text', 'TEXT');
+      await ensureColumn('work_text', 'TEXT');
+      await ensureColumn('inspiration_text', 'TEXT');
+      await ensureColumn('raw_text', 'TEXT');
+      await ensureColumn('created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+      await ensureColumn('processed_at', 'DATETIME');
+      await ensureColumn('source', "TEXT DEFAULT 'shortcut'");
+    } catch (e) {
+      console.warn('检查/补齐 raw_entries 列失败（可忽略）:', e?.message || e);
+    }
 
     // 创建 ai_data 表
     await turso.execute(`
@@ -133,7 +161,18 @@ export async function selectAll(table, whereClause = '', params = []) {
   try {
     const sql = `SELECT * FROM ${table} ${whereClause} ORDER BY date DESC`;
     const result = await query(sql, params);
-    return result.rows;
+    if (result && result.columns && result.rows) {
+      const columns = result.columns;
+      return result.rows.map(row => {
+        const record = {};
+        columns.forEach((col, index) => {
+          record[col] = row[index];
+        });
+        return record;
+      });
+    }
+    if (Array.isArray(result)) return result;
+    return [];
   } catch (error) {
     console.error(`查询 ${table} 失败:`, error);
     throw error;

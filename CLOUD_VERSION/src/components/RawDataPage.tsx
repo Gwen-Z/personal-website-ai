@@ -46,6 +46,8 @@ export default function RawDataPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editing, setEditing] = useState<Partial<SimpleRecordItem>>({})
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   // 移除学习图表相关状态，原始数据页面专注于数据管理
 
@@ -159,24 +161,68 @@ export default function RawDataPage() {
       work_description: editing.work_description || '',
       inspiration_description: editing.inspiration_description || '',
     }
-    await axios.put(`/api/simple-records/${id}`, body)
-    setEditingId(null)
-    setEditing({})
-    await load()
+    const prev = items
+    const optimistic = items.map(i => i.id === id ? {
+      ...i,
+      date: String(body.date || i.date),
+      mood_description: body.mood_description,
+      life_description: body.life_description,
+      study_description: body.study_description,
+      work_description: body.work_description,
+      inspiration_description: body.inspiration_description,
+    } : i)
+    setSavingId(id)
+    setItems(optimistic)
+    try {
+      await axios.put(`/api/simple-records/${id}`, body)
+      setEditingId(null)
+      setEditing({})
+    } catch (error: any) {
+      setItems(prev)
+      console.error('保存编辑失败:', error)
+      alert('保存失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+    } finally {
+      setSavingId(null)
+    }
   }
 
   async function remove(id: number) {
-    await axios.delete(`/api/simple-records/${id}`)
-    await load()
+    if (!window.confirm('确认删除该条记录吗？此操作不可撤销。')) return
+    const prev = items
+    const optimistic = items.filter(i => i.id !== id)
+    setDeletingId(id)
+    setItems(optimistic)
+    try {
+      await axios.delete(`/api/simple-records/${id}`)
+      if (editingId === id) {
+        setEditingId(null)
+        setEditing({})
+      }
+    } catch (error: any) {
+      setItems(prev)
+      console.error('删除失败:', error)
+      alert('删除失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   async function batchDelete() {
     const ids = Array.from(selected)
     if (!ids.length) return
-    await axios.delete('/api/simple-records/batch', { data: { ids } })
-    setSelected(new Set())
-    setSelectAll(false)
-    await load()
+    if (!window.confirm(`确认批量删除选中的 ${ids.length} 条记录吗？此操作不可撤销。`)) return
+    const prev = items
+    const optimistic = items.filter(i => !ids.includes(i.id))
+    setItems(optimistic)
+    try {
+      await axios.delete('/api/simple-records/batch', { data: { ids } })
+      setSelected(new Set())
+      setSelectAll(false)
+    } catch (error: any) {
+      setItems(prev)
+      console.error('批量删除失败:', error)
+      alert('批量删除失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+    }
   }
 
   const catLabel = (k: CategoryKey) => ({
@@ -506,13 +552,27 @@ export default function RawDataPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {editingId === item.id ? (
                       <>
-                        <button className="h-7 rounded bg-indigo-600 text-white px-2 mr-1 text-xs" onClick={()=>saveEdit(item.id)}>保存</button>
-                        <button className="h-7 rounded border px-2 text-xs" onClick={()=>{setEditingId(null); setEditing({})}}>取消</button>
+                        <button className="h-7 rounded bg-indigo-600 text-white px-2 mr-1 text-xs" onClick={()=>saveEdit(item.id)} disabled={savingId === item.id}>
+                          {savingId === item.id ? '保存中...' : '保存'}
+                        </button>
+                        <button className="h-7 rounded border px-2 text-xs" onClick={()=>{setEditingId(null); setEditing({})}} disabled={savingId === item.id}>取消</button>
                       </>
                     ) : (
                       <>
-                        <button className="h-7 rounded border px-2 mr-1 text-xs" onClick={()=>startEdit(item)}>编辑</button>
-                        <button className="h-7 rounded border px-2 text-xs" onClick={()=>remove(item.id)}>删除</button>
+                        <button 
+                          className="h-7 rounded border px-2 mr-1 text-xs transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          onClick={()=>startEdit(item)} 
+                          disabled={deletingId === item.id}
+                        >
+                          编辑
+                        </button>
+                        <button 
+                          className="h-7 rounded border px-2 text-xs transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          onClick={()=>remove(item.id)} 
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id ? '删除中...' : '删除'}
+                        </button>
                       </>
                     )}
                   </td>
