@@ -1,28 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 
-type SimpleRecordItem = {
+type RawTextItem = {
   id: number
   date: string
-  mood_description?: string
-  fitness_calories?: string
-  fitness_duration?: string
-  fitness_type?: string
-  study_description?: string
-  work_description?: string
-  inspiration_description?: string
+  mood_text?: string
+  fitness_text?: string
+  study_text?: string
+  work_text?: string
+  inspiration_text?: string
+  created_at?: string
 }
 
 
 export default function AIDataPage() {
-  const [items, setItems] = useState<SimpleRecordItem[]>([])
-  const [loading, setLoading] = useState(false)
+  const [items, setItems] = useState<RawTextItem[]>([])
+  // Removed loading state as requested
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [keyword, setKeyword] = useState('')
-
-  const [currentPage, setCurrentPage] = useState(1)
-  const PAGE_SIZE = 7
 
   // 新增数据的状态
   const [newEntry, setNewEntry] = useState({
@@ -33,19 +29,16 @@ export default function AIDataPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editing, setEditing] = useState<Partial<RawTextItem>>({})
-  const [savingId, setSavingId] = useState<number | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   async function load() {
-    setLoading(true)
     try {
       const params: any = {}
       if (from) params.from = from
       if (to) params.to = to
-      const { data } = await axios.get(`/api/simple-records`, { params })
-      setItems(Array.isArray(data.records) ? data.records : [])
-    } finally {
-      setLoading(false)
+      const { data } = await axios.get(`/api/raw-entries`, { params })
+      setItems(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('加载数据失败:', error)
     }
   }
 
@@ -53,24 +46,18 @@ export default function AIDataPage() {
     load() 
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredItems = useMemo(() => {
-    if (!keyword) return items;
-    const k = keyword.trim().toLowerCase();
-    return items.filter(i =>
-      (i.mood_description || '').toLowerCase().includes(k) ||
-      ((i.fitness_calories || '') + (i.fitness_duration || '') + (i.fitness_type || '')).toLowerCase().includes(k) ||
-      (i.study_description || '').toLowerCase().includes(k) ||
-      (i.work_description || '').toLowerCase().includes(k) ||
-      (i.inspiration_description || '').toLowerCase().includes(k) ||
-      i.date.toLowerCase().includes(k)
-    );
-  }, [items, keyword]);
-
-  const totalPages = Math.ceil(filteredItems.length / PAGE_SIZE);
   const displayed = useMemo(() => {
-    if (filteredItems.length === 0) return [];
-    return filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  }, [filteredItems, currentPage]);
+    if (!keyword) return items
+    const k = keyword.trim().toLowerCase()
+    return items.filter(i =>
+      (i.mood_text || '').toLowerCase().includes(k) ||
+      (i.fitness_text || '').toLowerCase().includes(k) ||
+      (i.study_text || '').toLowerCase().includes(k) ||
+      (i.work_text || '').toLowerCase().includes(k) ||
+      (i.inspiration_text || '').toLowerCase().includes(k) ||
+      i.date.toLowerCase().includes(k)
+    )
+  }, [items, keyword])
 
   async function addEntry() {
     if (!newEntry.description.trim()) {
@@ -81,8 +68,7 @@ export default function AIDataPage() {
     setAdding(true)
     try {
       const rawText = `日期：${newEntry.date}\n${newEntry.description}`
-      // 对应后端实际存在的接口文件 api/raw-entry.js
-      await axios.post('/api/raw-entry', { raw_text: rawText })
+      await axios.post('/api/parse-raw-text', { raw_text: rawText })
       setNewEntry({
         date: new Date().toISOString().slice(0, 10),
         description: ''
@@ -90,7 +76,7 @@ export default function AIDataPage() {
       await load()
     } catch (error: any) {
       console.error('添加数据失败:', error)
-      alert('添加失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
+      alert('添加失败：' + (error.response?.data?.message || error.message))
     } finally {
       setAdding(false)
     }
@@ -110,50 +96,15 @@ export default function AIDataPage() {
       work_text: editing.work_text || '',
       inspiration_text: editing.inspiration_text || '',
     }
-    const prev = items
-    const optimistic = items.map(i => i.id === id ? {
-      ...i,
-      date: String(body.date || i.date),
-      mood_text: body.mood_text,
-      fitness_text: body.fitness_text,
-      study_text: body.study_text,
-      work_text: body.work_text,
-      inspiration_text: body.inspiration_text,
-    } : i)
-    setSavingId(id)
-    setItems(optimistic)
-    try {
-      await axios.put(`/api/raw-entries/${id}`, body)
-      setEditingId(null)
-      setEditing({})
-    } catch (error: any) {
-      setItems(prev)
-      console.error('保存编辑失败:', error)
-      alert('保存失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
-    } finally {
-      setSavingId(null)
-    }
+    await axios.put(`/api/raw-entries/${id}`, body)
+    setEditingId(null)
+    setEditing({})
+    await load()
   }
 
   async function remove(id: number) {
-    if (!window.confirm('确认删除这条原始记录吗？此操作不可撤销。')) return
-    const prev = items
-    const optimistic = items.filter(i => i.id !== id)
-    setDeletingId(id)
-    setItems(optimistic)
-    try {
-      await axios.delete(`/api/raw-entries/${id}`)
-      if (editingId === id) {
-        setEditingId(null)
-        setEditing({})
-      }
-    } catch (error: any) {
-      setItems(prev)
-      console.error('删除失败:', error)
-      alert('删除失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
-    } finally {
-      setDeletingId(null)
-    }
+    await axios.delete(`/api/raw-entries/${id}`)
+    await load()
   }
 
   return (
@@ -216,7 +167,7 @@ export default function AIDataPage() {
           <input type="date" className="h-9 rounded-xl border px-2 text-sm" value={from} onChange={e=>setFrom(e.target.value)} />
           <span className="text-slate-500">至</span>
           <input type="date" className="h-9 rounded-xl border px-2 text-sm" value={to} onChange={e=>setTo(e.target.value)} />
-          <button className="h-9 rounded-xl bg-slate-900 text-white px-3 text-sm" onClick={load} disabled={loading}>查询</button>
+          <button className="h-9 rounded-xl bg-slate-900 text-white px-3 text-sm" onClick={load}>查询</button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-600 ml-2">关键词</span>
@@ -227,7 +178,7 @@ export default function AIDataPage() {
       <div className="rounded-2xl border bg-white">
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <div className="font-medium">原始数据列表</div>
-          <div className="text-sm text-slate-500">{loading ? '加载中...' : `共 ${filteredItems.length} 条`}</div>
+          <div className="text-sm text-slate-500">共 {displayed.length} 条</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -251,55 +202,40 @@ export default function AIDataPage() {
                     ) : item.date}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.mood_description}>{item.mood_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input value={editing.mood_text || ''} onChange={e=>setEditing(prev=>({...prev, mood_text: e.target.value}))} className="h-8 rounded border px-2 w-full" />
+                    ) : <span className="truncate inline-block max-w-full" title={item.mood_text}>{item.mood_text || '—'}</span>}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    {(() => {
-                      const parts = [];
-                      if (item.fitness_type) parts.push(item.fitness_type);
-                      if (item.fitness_duration) parts.push(`${item.fitness_duration}分钟`);
-                      if (item.fitness_calories) parts.push(`${item.fitness_calories}卡`);
-                      const fitnessText = parts.join(' ');
-                      return (
-                        <span className="truncate inline-block max-w-full" title={fitnessText}>
-                          {fitnessText || '—'}
-                        </span>
-                      );
-                    })()}
+                    {editingId === item.id ? (
+                      <input value={editing.fitness_text || ''} onChange={e=>setEditing(prev=>({...prev, fitness_text: e.target.value}))} className="h-8 rounded border px-2 w-full" />
+                    ) : <span className="truncate inline-block max-w-full" title={item.fitness_text}>{item.fitness_text || '—'}</span>}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.study_description}>{item.study_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input value={editing.study_text || ''} onChange={e=>setEditing(prev=>({...prev, study_text: e.target.value}))} className="h-8 rounded border px-2 w-full" />
+                    ) : <span className="truncate inline-block max-w-full" title={item.study_text}>{item.study_text || '—'}</span>}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.work_description}>{item.work_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input value={editing.work_text || ''} onChange={e=>setEditing(prev=>({...prev, work_text: e.target.value}))} className="h-8 rounded border px-2 w-full" />
+                    ) : <span className="truncate inline-block max-w-full" title={item.work_text}>{item.work_text || '—'}</span>}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.inspiration_description}>{item.inspiration_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input value={editing.inspiration_text || ''} onChange={e=>setEditing(prev=>({...prev, inspiration_text: e.target.value}))} className="h-8 rounded border px-2 w-full" />
+                    ) : <span className="truncate inline-block max-w-full" title={item.inspiration_text}>{item.inspiration_text || '—'}</span>}
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     {editingId === item.id ? (
                       <>
-                        <button className="h-8 rounded bg-indigo-600 text-white px-3 mr-2" onClick={()=>saveEdit(item.id)} disabled={savingId === item.id}>
-                          {savingId === item.id ? '保存中...' : '保存'}
-                        </button>
-                        <button className="h-8 rounded border px-3" onClick={()=>{setEditingId(null); setEditing({})}} disabled={savingId === item.id}>取消</button>
+                        <button className="h-8 rounded bg-indigo-600 text-white px-3 mr-2" onClick={()=>saveEdit(item.id)}>保存</button>
+                        <button className="h-8 rounded border px-3" onClick={()=>{setEditingId(null); setEditing({})}}>取消</button>
                       </>
                     ) : (
                       <>
-                        <button 
-                          className="h-8 rounded border px-3 mr-2 transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
-                          onClick={()=>startEdit(item)} 
-                          disabled={deletingId === item.id}
-                        >
-                          编辑
-                        </button>
-                        <button 
-                          className="h-8 rounded border px-3 transition-colors active:scale-95 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 active:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed" 
-                          onClick={()=>remove(item.id)} 
-                          disabled={deletingId === item.id}
-                        >
-                          {deletingId === item.id ? '删除中...' : '删除'}
-                        </button>
+                        <button className="h-8 rounded border px-3 mr-2" onClick={()=>startEdit(item)}>编辑</button>
+                        <button className="h-8 rounded border px-3" onClick={()=>remove(item.id)}>删除</button>
                       </>
                     )}
                   </td>
@@ -311,30 +247,6 @@ export default function AIDataPage() {
             </tbody>
           </table>
         </div>
-
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t flex items-center justify-between">
-            <div className="text-xs text-slate-500">
-              第 {currentPage} / {totalPages} 页
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="h-8 rounded-xl border text-sm px-3 transition-colors active:scale-95 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                上一页
-              </button>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="h-8 rounded-xl border text-sm px-3 transition-colors active:scale-95 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                下一页
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

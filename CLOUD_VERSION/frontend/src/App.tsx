@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 import axios from 'axios'
 // 通过 package.json 的 proxy 使用相对路径调用后端，无需显式 BASE_URL
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, Brush, Cell } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, Brush, Cell, ScatterChart, Scatter } from 'recharts'
 import RawDataPage from './components/RawDataPage.tsx'
 import AIDataPage from './components/AIDataPage.tsx'
 import AIModal from './components/AIModal.tsx'
@@ -19,9 +19,31 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'inspiration', label: '捕捉灵感', icon: '💡' },
 ]
 
+// mock 数据（后续替换为接口数据）
+const studyBars = [
+  { cat: '编程', h: 12 }, { cat: '设计', h: 6 }, { cat: '英语', h: 4 }, { cat: '运动', h: 8 }, { cat: '阅读', h: 3 },
+]
 
+// 胶囊柱：上下都圆角（正/负值都适配）
+const CapsuleBar = ({ x, y, width, height, fill, radius = 8 }: any) => {
+  const h = Math.abs(height || 0);
+  const r = Math.min(radius, width / 2, h / 2);
+  const topY = height >= 0 ? y : y - h; // 兼容负值
+  const w = Math.max(0, width - 2 * r);
 
-
+  const d = `
+    M ${x} ${topY + r}
+    a ${r} ${r} 0 0 1 ${r} -${r}
+    h ${w}
+    a ${r} ${r} 0 0 1 ${r} ${r}
+    v ${Math.max(0, h - 2 * r)}
+    a ${r} ${r} 0 0 1 -${r} ${r}
+    h -${w}
+    a ${r} ${r} 0 0 1 -${r} -${r}
+    Z
+  `;
+  return <path d={d} fill={fill} />;
+};
 
 function SectionHeader({ title, onAIClick, onDateChange, onQuery }: { 
   title: string; 
@@ -131,13 +153,12 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   const [data, setData] = React.useState<MoodPoint[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 6);
+    const today = new Date()
+    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: fromDate.toISOString().slice(0, 10),
-      to: toDate.toISOString().slice(0, 10),
-    };
+      from: sixDaysAgo.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10)
+    }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
   const [aiAnalysis, setAiAnalysis] = React.useState({
@@ -283,7 +304,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data.records) ? res.data.records : []
+        const rows = Array.isArray(res.data) ? res.data : []
         
         const pointsByDate: MoodPoint[] = rows
           .filter((r: any) => r.mood_description && r.mood_description.trim() !== '') // 只要有情绪描述的记录
@@ -291,11 +312,8 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
             const dateStr = (typeof r.date === 'string' && r.date.length >= 10)
               ? r.date.slice(0, 10)
               : new Date(r.date).toISOString().slice(0, 10)
-            // 使用AI分析的分值；当分值为 undefined/NaN 时回退到文本解析
-            const rawScore = (r as any).mood_score
-            const score = (typeof rawScore === 'number' && !Number.isNaN(rawScore))
-              ? rawScore
-              : parseMoodToScore(r.mood_description || '')
+            // 使用AI分析的分值，如果没有则用文本解析
+            const score = r.mood_score !== null ? r.mood_score : parseMoodToScore(r.mood_description || '')
             const note = (r.mood_description || '')
             return {
               day: dateStr,
@@ -308,13 +326,8 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
 
         // 无论是否有数据，都生成完整的7天日期序列
         const processedData = generateContinuousDateData(pointsByDate.length > 0 ? pointsByDate : [])
-        // 过滤掉 score 为空或非数值的点，避免整条线不可见
-        const sanitized = processedData.map(p => ({
-          ...p,
-          score: (typeof p.score === 'number' && !Number.isNaN(p.score)) ? p.score : null
-        }))
         // 使用数值型索引作为X，确保两端各留一个等距空档：domain [0, n+1]
-        const indexedData = sanitized.map((d: any, idx: number) => ({
+        const indexedData = processedData.map((d: any, idx: number) => ({
           ...d,
           xIndex: idx + 1, // 1..n
         }))
@@ -367,7 +380,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
                   return dateStr
                 }}
               />
-              <YAxis tick={{ fontSize: 12 }} domain={[-3, 5]} allowDecimals={true} />
+              <YAxis tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v:any)=>[v,'分值']} labelFormatter={(l:any)=>l} />
               <Line 
                 type="monotone" 
@@ -450,13 +463,12 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
   const [bars, setBars] = React.useState<LifeBar[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 6);
+    const today = new Date()
+    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: fromDate.toISOString().slice(0, 10),
-      to: toDate.toISOString().slice(0, 10),
-    };
+      from: sixDaysAgo.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10)
+    }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
 
@@ -593,7 +605,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data.records) ? res.data.records : []
+        const rows = Array.isArray(res.data) ? res.data : []
 
         const mapped: LifeBar[] = rows
           .filter((r: any) => r.fitness_calories || r.fitness_duration) // 只要有健身数据的记录
@@ -729,13 +741,12 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   const [studyBars, setStudyBars] = React.useState<StudyBar[]>([])
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 6);
+    const today = new Date()
+    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: fromDate.toISOString().slice(0, 10),
-      to: toDate.toISOString().slice(0, 10),
-    };
+      from: sixDaysAgo.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10)
+    }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
   
@@ -875,7 +886,7 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data.records) ? res.data.records : []
+        const rows = Array.isArray(res.data) ? res.data : []
 
         // 处理学习数据，支持同一天多个学习记录
         const studyRecords = rows
@@ -1158,16 +1169,15 @@ const TASK_TYPE_COLORS = {
 
 /* 5. 工作甘特图分析 */
 function WorkCompletion({ onAIClick, ...props }: any) {
-
+  const { data = [], from, to, setFrom, setTo, onQuery, loading } = props;
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 6);
+    const today = new Date()
+    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: fromDate.toISOString().slice(0, 10),
-      to: toDate.toISOString().slice(0, 10),
-    };
+      from: sixDaysAgo.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10)
+    }
   }
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
   const [workTasks, setWorkTasks] = useState<WorkTask[]>([])
@@ -1231,7 +1241,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data.records) ? res.data.records : []
+        const rows = Array.isArray(res.data) ? res.data : []
 
         // 处理工作数据
         const workRecords = rows
@@ -1336,7 +1346,16 @@ function WorkCompletion({ onAIClick, ...props }: any) {
   const maxDateObj = workTasks.length ? new Date(Math.max(...workTasks.map(t => new Date(t.date).getTime()))) : new Date()
   minDateObj.setHours(0,0,0,0); maxDateObj.setHours(0,0,0,0)
 
-
+  // 生成每天的离散标签
+  const dayLabels: string[] = (() => {
+    const labels: string[] = []
+    const d = new Date(minDateObj)
+    while (d.getTime() <= maxDateObj.getTime()) {
+      labels.push(formatDateMD(d))
+      d.setDate(d.getDate()+1)
+    }
+    return labels
+  })()
 
   // 为同一"天+阶段"的多个任务做轻微抖动，避免完全重叠
   const jitterCounter = new Map<string, number>()
@@ -1357,7 +1376,12 @@ function WorkCompletion({ onAIClick, ...props }: any) {
     }
   })
 
-
+  // 将各阶段拆分为多序列，便于着色与图例
+  const seriesByStage = STAGE_ORDER.map(stage => ({
+    stage,
+    color: STAGE_COLORS[stage],
+    data: timelinePoints.filter(p => p.type === stage)
+  }))
 
   // 自定义甘特图组件（恢复）
   const GanttChart = () => {
@@ -1525,17 +1549,51 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
   const [loading, setLoading] = React.useState(false)
   // 默认显示最近一周数据
   const getDefaultDateRange = () => {
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 6);
+    const today = new Date()
+    const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 6天前，加上今天正好7天
     return {
-      from: fromDate.toISOString().slice(0, 10),
-      to: toDate.toISOString().slice(0, 10),
-    };
+      from: sixDaysAgo.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10)
+    }
   }
   const [dateRange, setDateRange] = React.useState(getDefaultDateRange())
 
-
+  // 生成完整的7天灵感数据，包含空的占位符
+  const generateCompleteInspirationWeekData = (realData: any[], dateRange: {from: string, to: string}): any[] => {
+    const result: any[] = []
+    const dataMap = new Map()
+    
+    // 将真实数据映射到日期
+    realData.forEach(item => {
+      dataMap.set(item.date, item)
+    })
+    
+    // 生成完整的7天
+    const currentDate = new Date(dateRange.from)
+    const endDate = new Date(dateRange.to)
+    
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().slice(0, 10)
+      const existingData = dataMap.get(dateStr)
+      
+      if (existingData) {
+        result.push(existingData)
+      } else {
+        // 添加空数据占位符
+        result.push({
+          date: dateStr,
+          inspiration_description: '无灵感记录',
+          inspiration_theme: '无',
+          inspiration_difficulty: '低',
+          inspiration_product: '无'
+        })
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    
+    return result
+  }
 
   // 加载真实灵感数据
   React.useEffect(() => {
@@ -1546,22 +1604,14 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
         const res = await axios.get(`/api/simple-records`, { params })
-        const rows = Array.isArray(res.data.records) ? res.data.records : []
+        const rows = Array.isArray(res.data) ? res.data : []
         
-        // 筛选有灵感记录的数据 - 简化过滤条件
-        const inspirationRows = rows.filter(r => 
-          r.inspiration_description && 
-          r.inspiration_description.trim() !== '' && 
-          r.inspiration_description !== '没想法' &&
-          r.inspiration_description !== '无灵感记录' &&
-          r.inspiration_theme && 
-          r.inspiration_theme !== '无'
-        )
+        // 筛选有灵感记录的数据
+        const inspirationRows = rows.filter(r => r.inspiration_description && r.inspiration_description.trim() !== '' && r.inspiration_description !== '没想法')
         
-
-        
-        // 直接使用真实数据，不添加占位符
-        setInspirationData(inspirationRows)
+        // 生成完整的7天数据，包含空的占位符
+        const completeWeekData = generateCompleteInspirationWeekData(inspirationRows, dateRange)
+        setInspirationData(completeWeekData)
       } catch (e) {
         console.warn('加载灵感数据失败', e)
         setInspirationData([])
@@ -1659,12 +1709,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
           </div>
         </div>
       ) : (
-                 <TimelineBubbleChart 
-                   data={inspirationData} 
-                   height={550} 
-                   from={dateRange.from} 
-                   to={dateRange.to} 
-                 />
+                 <TimelineBubbleChart data={inspirationData} height={550} />
       )}
 
       {/* AI 解读和指标面板 */}
@@ -1830,7 +1875,7 @@ export default function AnalyticsTabsPage() {
               }`}
             >
               <span>📜</span>
-              <span className="whitespace-nowrap">原始数据</span>
+              <span className="whitespace-nowrap">AI处理数据</span>
             </button>
             <button
               onClick={() => { setView('data'); setDataActive('ai') }}
@@ -1839,7 +1884,7 @@ export default function AnalyticsTabsPage() {
               }`}
             >
               <span>🤖</span>
-              <span className="whitespace-nowrap">AI处理数据</span>
+              <span className="whitespace-nowrap">原始数据</span>
             </button>
 
           </nav>
