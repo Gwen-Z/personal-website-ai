@@ -42,7 +42,7 @@ export default function RawDataPage() {
 
   // 批量选择
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [selectAll, setSelectAll] = useState(false)
+
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editing, setEditing] = useState<Partial<SimpleRecordItem>>({})
@@ -121,7 +121,7 @@ export default function RawDataPage() {
 
   useEffect(() => { 
     load()
-  }, [])
+  }, [load])
 
   // 移除学习图表数据处理，专注于原始数据管理
 

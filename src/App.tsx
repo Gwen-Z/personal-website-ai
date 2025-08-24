@@ -342,7 +342,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
       }
     }
     load()
-  }, [dateRange])
+  }, [dateRange, generateContinuousDateData])
 
   const handleDateChange = (from: string, to: string) => {
     setDateRange({ from, to })
@@ -631,7 +631,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
       }
     }
     load()
-  }, [dateRange])
+  }, [dateRange, generateCompleteWeekData, generateDefaultTestData])
 
   const handleDateChange = (from: string, to: string) => setDateRange({ from, to })
   const handleQuery = (from: string, to: string) => setDateRange({ from, to })
@@ -928,7 +928,7 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
       }
     }
     load()
-  }, [dateRange])
+  }, [dateRange, analyzeStudyData, generateCompleteStudyWeekData, parseDuration])
 
   // 分析学习数据并生成AI解读
   const analyzeStudyData = (studyItems: StudyBar[]) => {
@@ -1318,14 +1318,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
   // 时间线数据准备（按天离散）
   const STAGE_ORDER = ['规划','开发','部署','UI/UX设计','功能集成','测试/收尾']
   const STAGE_TO_Y: Record<string, number> = STAGE_ORDER.reduce((acc, s, i) => { acc[s] = i + 1; return acc }, {} as Record<string, number>)
-  const STAGE_COLORS: Record<string, string> = {
-    '规划': '#3b82f6',       // 蓝
-    '开发': '#f59e0b',       // 橙
-    '部署': '#10b981',       // 绿
-    'UI/UX设计': '#8b5cf6',  // 紫
-    '功能集成': '#ef4444',   // 红
-    '测试/收尾': '#6b7280'   // 灰
-  }
+
 
   const formatDateMD = (d: Date) => {
     const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0');
@@ -1350,22 +1343,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
 
   // 为同一"天+阶段"的多个任务做轻微抖动，避免完全重叠
   const jitterCounter = new Map<string, number>()
-  const timelinePoints = workTasks.map(t => {
-    const d = new Date(t.date); d.setHours(0,0,0,0)
-    const xLabel = formatDateMD(d)
-    const baseY = STAGE_TO_Y[t.taskType] ?? STAGE_TO_Y['规划']
-    const key = `${xLabel}|${t.taskType}`
-    const idx = jitterCounter.get(key) ?? 0
-    jitterCounter.set(key, idx + 1)
-    const jitter = idx * 0.08 // 每条上移 0.08，避免重叠
-    return {
-      xLabel,
-      y: baseY - jitter,
-      type: t.taskType,
-      task: t.task,
-      date: t.date
-    }
-  })
+
 
   // 将各阶段拆分为多序列，便于着色与图例
   const seriesByStage = STAGE_ORDER.map(stage => ({
