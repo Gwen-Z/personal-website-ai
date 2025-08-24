@@ -1272,7 +1272,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
       }
     }
     load()
-  }, [dateRange])
+  }, [dateRange, generateCompleteWeekData, generateDefaultTestData])
 
   // 分析工作数据并生成AI解读
   const analyzeWorkData = (tasks: WorkTask[]) => {

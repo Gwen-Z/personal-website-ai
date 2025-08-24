@@ -129,7 +129,6 @@ export default function RawDataPage() {
   const allChecked = useMemo(() => items.length > 0 && selected.size === items.length, [items, selected])
 
   function toggleAll(checked: boolean) {
-    setSelectAll(checked)
     if (checked) {
       setSelected(new Set(items.map(i => i.id)))
     } else {
