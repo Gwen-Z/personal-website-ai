@@ -3,22 +3,27 @@
   "version": "1.0.0",
   "description": "个人数据分析网站 - 云端版本",
   "main": "src/index.js",
+  "proxy": "http://localhost:3001",
   "scripts": {
     "dev": "react-scripts start",
     "build": "CI=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "vercel-build": "react-scripts build"
+    "vercel-build": "react-scripts build",
+    "sync:down": "node scripts/sync-from-turso.js"
   },
   "dependencies": {
-    "@libsql/client": "^0.5.2",
+    "@libsql/client": "^0.5.6",
     "@vercel/node": "^3.0.0",
     "axios": "^1.11.0",
+    "dotenv": "^17.2.1",
     "node-fetch": "^3.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "recharts": "^2.15.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
     "web-vitals": "^3.4.0"
   },
   "devDependencies": {
@@ -43,5 +48,4 @@
       "last 1 safari version"
     ]
   }
-
 }

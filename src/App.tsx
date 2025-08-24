@@ -363,22 +363,13 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
             <LineChart data={data} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
-                dataKey="xIndex" 
-                type="number"
-                domain={[0, (data?.length || 0) + 1]}
-                allowDecimals={false}
+                dataKey="day" 
+                type="category"
                 tick={{ fontSize: 12 }}
                 interval={0}
                 axisLine={true}
                 tickLine={true}
-                ticks={Array.from({ length: (data?.length || 0) }, (_, i) => i + 1)}
-                tickFormatter={(v:any) => {
-                  const idx = Number(v) - 1
-                  const item = data[idx]
-                  const dateStr = item?.day || ''
-                  if (dateStr.length >= 10 && dateStr.includes('-')) return dateStr.slice(5)
-                  return dateStr
-                }}
+                tickFormatter={(v:any) => (typeof v === 'string' && v.includes('-') ? v.slice(5) : v)}
               />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v:any)=>[v,'分值']} labelFormatter={(l:any)=>l} />
