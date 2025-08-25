@@ -141,12 +141,12 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
   const [aiAnalysis, setAiAnalysis] = React.useState({
-    timePeriod: '最近7天',
-    summary: '情绪波动较大，周末情绪明显好转',
-    causes: '工作压力和加班压力是主要负面触发源',
-    suggestions: '增加娱乐活动，建立情绪缓冲机制',
-    positiveRatio: 68,
-    recoveryScore: 7.2
+    timePeriod: '...',
+    summary: '正在分析...',
+    causes: '正在分析...',
+    suggestions: '正在分析...',
+    positiveRatio: 0,
+    recoveryScore: 0
   })
 
   // 生成连续日期数据，确保等间距显示
@@ -207,52 +207,55 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
 
   // 分析心情数据并生成AI解读
   const analyzeEmotionData = (moodData: MoodPoint[]) => {
-    if (moodData.length === 0) return
-
-    // 过滤掉null值
-    const validScores = moodData.map(d => d.score).filter(score => score !== null) as number[]
-    if (validScores.length === 0) return
-
-    const avgScore = validScores.reduce((a, b) => a + b, 0) / validScores.length
-    const positiveCount = validScores.filter(s => s > 0).length
-    const positiveRatio = Math.round((positiveCount / validScores.length) * 100)
-    
-    // 计算情绪波动
-    const variance = validScores.reduce((acc, score) => acc + Math.pow(score - avgScore, 2), 0) / validScores.length
-    const volatility = Math.sqrt(variance)
-    
-    // 生成动态分析
-    let summary = ''
-    if (volatility > 2) {
-      summary = '情绪波动较大，需要关注情绪稳定性'
-    } else if (volatility > 1) {
-      summary = '情绪有一定波动，整体趋势向好'
-    } else {
-      summary = '情绪相对稳定，保持良好状态'
+    const validScores = moodData.map(d => d.score).filter(score => score !== null) as number[];
+    if (validScores.length === 0) {
+      setAiAnalysis({
+        timePeriod: '最近7天',
+        summary: '暂无足够数据进行分析',
+        causes: '请先记录您的情绪',
+        suggestions: '开始记录后，AI将为您提供分析和建议',
+        positiveRatio: 0,
+        recoveryScore: 0
+      });
+      return;
     }
 
-    // 识别主要情绪触发因素
-    const negativeEvents = moodData.filter(d => d.score !== null && d.score < 0 && d.event).map(d => d.event)
+    const avgScore = validScores.reduce((a, b) => a + b, 0) / validScores.length;
+    const positiveCount = validScores.filter(s => s > 0).length;
+    const positiveRatio = Math.round((positiveCount / validScores.length) * 100);
     
-    let causes = '暂无明显负面触发因素'
+    const variance = validScores.reduce((acc, score) => acc + Math.pow(score - avgScore, 2), 0) / validScores.length;
+    const volatility = Math.sqrt(variance);
+    
+    let summary = '';
+    if (volatility > 2) {
+      summary = '情绪波动较大，需要关注情绪稳定性';
+    } else if (volatility > 1) {
+      summary = '情绪有一定波动，但整体趋势向好';
+    } else {
+      summary = '情绪相对稳定，保持得不错';
+    }
+
+    const negativeEvents = moodData.filter(d => d.score !== null && d.score < 0 && d.event).map(d => d.event);
+    let causes = '暂无明显负面触发因素';
     if (negativeEvents.length > 0) {
-      const commonWords = ['工作', '压力', '加班', '担忧', '疲惫']
+      const commonWords = ['工作', '压力', '加班', '担忧', '疲惫'];
       const foundCauses = commonWords.filter(word => 
         negativeEvents.some(event => event?.includes(word))
-      )
+      );
       if (foundCauses.length > 0) {
-        causes = `${foundCauses.join('、')}是主要负面触发源`
+        causes = `${foundCauses.join('、')}可能是主要负面触发源`;
       }
     }
 
-    let suggestions = '继续保持当前良好状态'
+    let suggestions = '继续保持当前良好状态';
     if (avgScore < 0) {
-      suggestions = '建议增加放松活动，寻求支持和帮助'
+      suggestions = '建议增加放松活动，并与朋友或家人沟通';
     } else if (volatility > 1.5) {
-      suggestions = '建立情绪调节机制，保持规律作息'
+      suggestions = '尝试建立情绪调节机制，如冥想或规律作息';
     }
 
-    const recoveryScore = Math.max(1, Math.min(10, 5 + avgScore + (positiveRatio / 20)))
+    const recoveryScore = Math.max(1, Math.min(10, 5 + avgScore + (positiveRatio / 20)));
 
     setAiAnalysis({
       timePeriod: '最近7天',
@@ -261,7 +264,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
       suggestions,
       positiveRatio,
       recoveryScore: Number(recoveryScore.toFixed(1))
-    })
+    });
   }
 
   React.useEffect(() => {
@@ -813,11 +816,12 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   }
 
   const [studyAnalysis, setStudyAnalysis] = React.useState({
-    summary: 'AI知识学习投入最多，练毛笔字培养兴趣',
-    timeInfo: '33小时（平均每日1.1小时）',
-    suggestions: '学习内容丰富多样，建议增加实践应用',
-    totalHours: 40,
-    dailyAverage: 1.7
+    summary: '正在分析...',
+    timeInfo: '...',
+    suggestions: '正在分析...',
+    totalHours: 0,
+    totalMinutes: 0,
+    dailyAverage: 0
   })
 
   // 学习类别颜色映射
@@ -966,38 +970,48 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
 
   // 分析学习数据并生成AI解读
   const analyzeStudyData = (studyItems: StudyBar[]) => {
-    const totalHoursRaw = studyItems.reduce((sum, item) => sum + item.hours, 0)
-    const totalHours = Number(totalHoursRaw.toFixed(2)) // 两位小数，四舍五入
-    const totalMinutes = Math.round(totalHoursRaw * 60) // 分钟取整数
-    const days = studyItems.length
-    const dailyAverage = days > 0 ? Number((totalHoursRaw / days).toFixed(2)) : 0
-    
-    // 按类别统计
-    const categoryStats = studyItems.reduce((acc, item) => {
-      acc[item.category] = (acc[item.category] || 0) + item.hours
-      return acc
-    }, {} as Record<string, number>)
-    
-    const sortedCategories = Object.entries(categoryStats).sort((a, b) => b[1] - a[1])
-    const topCategory = sortedCategories[0]?.[0] || '编程'
-    const secondCategory = sortedCategories[1]?.[0] || '外语'
-    
-    let summary = ''
-    if (topCategory.includes('AI')) {
-      summary = `${topCategory}学习投入最多，${secondCategory}持续跟进`
-    } else {
-      summary = `${topCategory}和${secondCategory}是主要学习方向`
+    if (studyItems.length === 0) {
+      setStudyAnalysis({
+        summary: '暂无学习数据',
+        timeInfo: '0小时',
+        suggestions: '开始记录你的学习吧！',
+        totalHours: 0,
+        totalMinutes: 0,
+        dailyAverage: 0
+      });
+      return;
     }
 
-    const timeInfo = `${totalHours.toFixed(2)}小时（平均每日${dailyAverage.toFixed(2)}小时）`
+    const totalHoursRaw = studyItems.reduce((sum, item) => sum + item.hours, 0);
+    const totalHours = Number(totalHoursRaw.toFixed(2));
+    const totalMinutes = Math.round(totalHoursRaw * 60);
+    const uniqueDays = new Set(studyItems.map(item => item.date)).size;
+    const dailyAverage = uniqueDays > 0 ? Number((totalHoursRaw / uniqueDays).toFixed(2)) : 0;
+    
+    const categoryStats = studyItems.reduce((acc, item) => {
+      acc[item.category] = (acc[item.category] || 0) + item.hours;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const sortedCategories = Object.entries(categoryStats).sort((a, b) => b[1] - a[1]);
+    const topCategory = sortedCategories[0]?.[0] || '未知';
+    const secondCategory = sortedCategories[1]?.[0];
+    
+    let summary = `${topCategory}是主要学习方向`;
+    if (secondCategory) {
+      summary += `，其次是${secondCategory}`;
+    }
+    summary += '。';
 
-    let suggestions = '继续保持良好的学习节奏'
-    if (dailyAverage < 1) {
-      suggestions = '建议增加学习时间，培养持续学习的习惯'
-    } else if (dailyAverage > 2) {
-      suggestions = '学习投入充足，建议增加实践应用和项目练习'
-    } else {
-      suggestions = '学习内容丰富多样，建议增加实践应用'
+    const timeInfo = `${totalHours.toFixed(2)}小时（平均每日${dailyAverage.toFixed(2)}小时）`;
+
+    let suggestions = '学习规划合理，请继续保持。';
+    if (dailyAverage < 0.5) {
+      suggestions = '学习时间较少，建议每天至少投入半小时。';
+    } else if (dailyAverage > 3) {
+      suggestions = '学习投入非常充足，注意劳逸结合，避免过度疲劳。';
+    } else if (sortedCategories.length > 3) {
+        suggestions = '学习领域广泛，建议适当聚焦，深入学习核心领域。'
     }
 
     setStudyAnalysis({
@@ -1007,7 +1021,7 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
       totalHours,
       totalMinutes,
       dailyAverage
-    })
+    });
   }
 
   const handleDateChange = (from: string, to: string) => setDateRange({ from, to })
@@ -1253,8 +1267,8 @@ function WorkCompletion({ onAIClick, ...props }: any) {
   }
 
   const [workAnalysis, setWorkAnalysis] = useState({
-    summary: '项目整体进展顺利，各阶段任务有序推进',
-    suggestions: '建议优化任务优先级管理，提高工作效率',
+    summary: '正在分析...',
+    suggestions: '正在分析...',
     totalTasks: 0,
     completedTasks: 0,
     avgDuration: 0
@@ -1311,31 +1325,42 @@ function WorkCompletion({ onAIClick, ...props }: any) {
 
   // 分析工作数据并生成AI解读
   const analyzeWorkData = (tasks: WorkTask[]) => {
-    const totalTasks = tasks.length
-    const completedTasks = tasks.filter(t => new Date(t.date) <= new Date()).length
-    const avgDuration = totalTasks > 0 ? tasks.reduce((sum, t) => sum + t.estimatedHours, 0) / totalTasks : 0
-    
-    // 按任务类型统计
-    const typeStats = tasks.reduce((acc, task) => {
-      acc[task.taskType] = (acc[task.taskType] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
-    const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1] - a[1])
-    const mainTaskType = sortedTypes[0]?.[0] || '开发'
-    
-    let summary = `项目包含${totalTasks}个任务，以${mainTaskType}为主要工作内容`
-    if (completedTasks > 0) {
-      summary += `，已完成${completedTasks}个任务，进展顺利`
+    if (tasks.length === 0) {
+      setWorkAnalysis({
+        summary: '暂无工作数据',
+        suggestions: '开始记录你的工作任务吧！',
+        totalTasks: 0,
+        completedTasks: 0,
+        avgDuration: 0
+      });
+      return;
     }
 
-    let suggestions = '继续保持当前工作节奏'
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => new Date(t.date) < new Date()).length; // Assuming tasks before today are completed
+    const totalHours = tasks.reduce((sum, t) => sum + t.estimatedHours, 0);
+    const avgDuration = totalTasks > 0 ? totalHours / totalTasks : 0;
+
+    const typeStats = tasks.reduce((acc, task) => {
+      acc[task.taskType] = (acc[task.taskType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1] - a[1]);
+    const mainTaskType = sortedTypes[0]?.[0] || '未分类';
+
+    let summary = `共记录了 ${totalTasks} 个任务，主要集中在 ${mainTaskType} 领域。`;
+    if (completedTasks > 0) {
+      summary += ` 已完成 ${completedTasks} 个。`;
+    }
+
+    let suggestions = '任务规划合理，请继续保持。';
     if (avgDuration > 8) {
-      suggestions = '任务工时较高，建议拆分复杂任务，提高执行效率'
-    } else if (avgDuration < 4) {
-      suggestions = '任务规模适中，可考虑增加任务复杂度以提升技能'
-    } else {
-      suggestions = '任务规划合理，建议定期总结经验和优化流程'
+      suggestions = '平均任务耗时较长，建议将大任务拆解成更小的步骤。';
+    } else if (totalTasks > 10 && avgDuration < 2) {
+      suggestions = '任务数量多但平均耗时短，注意任务切换的成本。';
+    } else if (tasks.some(t => t.priority === '高')) {
+        suggestions = '存在高优先级任务，请优先处理，确保项目进度。'
     }
 
     setWorkAnalysis({
@@ -1344,7 +1369,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
       totalTasks,
       completedTasks,
       avgDuration: Math.round(avgDuration * 10) / 10
-    })
+    });
   }
 
   const handleDateChange = (from: string, to: string) => setDateRange({ from, to })
@@ -1612,69 +1637,65 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
 
   const [inspirationAnalysis, setInspirationAnalysis] = React.useState({
     totalCount: 0,
-    mostCategory: '未分类',
-    activeTime: '创意时间',
-    sources: {
-      xiaohongshu: 0,
-      shipinhao: 0,
-      others: 100
-    },
-    suggestions: '开始记录你的创意灵感吧！',
+    mostCategory: '...',
+    activeTime: '...',
+    suggestions: '正在分析...',
     highValueCount: 0,
-    difficultyCount: {} as Record<string, number>
+    difficultyCount: {}
   })
 
   // 分析灵感数据并生成AI解读
   const analyzeInspirationData = React.useCallback(() => {
-    const totalCount = inspirationData.length
-    
-    // 分析主题分布
-    const categoryCount: Record<string, number> = {}
-    inspirationData.forEach(item => {
-      const theme = item.inspiration_theme || '未分类'
-      categoryCount[theme] = (categoryCount[theme] || 0) + 1
-    })
-    
-    const mostCategory = Object.entries(categoryCount)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || '未分类'
+    if (inspirationData.length === 0) {
+      setInspirationAnalysis({
+        totalCount: 0,
+        mostCategory: '无',
+        suggestions: '开始记录你的灵感吧！',
+        highValueCount: 0,
+        difficultyCount: {},
+        activeTime: ''
+      });
+      return;
+    }
 
-    // 分析难度分布
-    const difficultyCount: Record<string, number> = {}
+    const totalCount = inspirationData.length;
+    
+    const categoryCount: Record<string, number> = {};
     inspirationData.forEach(item => {
-      const difficulty = item.inspiration_difficulty || '中'
-      difficultyCount[difficulty] = (difficultyCount[difficulty] || 0) + 1
-    })
+      const theme = item.inspiration_theme || '未分类';
+      categoryCount[theme] = (categoryCount[theme] || 0) + 1;
+    });
+    
+    const mostCategory = Object.entries(categoryCount).sort(([,a], [,b]) => b - a)[0]?.[0] || '未分类';
 
-    // 计算高价值项目数量
+    const difficultyCount: Record<string, number> = {};
+    inspirationData.forEach(item => {
+      const difficulty = item.inspiration_difficulty || '中';
+      difficultyCount[difficulty] = (difficultyCount[difficulty] || 0) + 1;
+    });
+
     const highValueCount = inspirationData.filter(item => 
       item.inspiration_difficulty === '高' || 
-      (item.inspiration_theme && ['AI工具开发', '金融科技'].includes(item.inspiration_theme))
-    ).length
+      (item.inspiration_theme && ['AI工具开发', '金融科技', '自动化流程'].includes(item.inspiration_theme))
+    ).length;
 
-    let suggestions = '继续保持灵感记录的好习惯'
-    if (totalCount === 0) {
-      suggestions = '开始记录你的创意灵感吧！'
-    } else if (highValueCount > totalCount * 0.3) {
-      suggestions = '高价值项目较多，建议优先实现可行性高的项目'
-    } else if (mostCategory === 'AI工具开发') {
-      suggestions = 'AI相关灵感丰富，建议深入发展该领域'
-    } else if (totalCount > 5) {
-      suggestions = '灵感数量丰富，建议分类整理并制定实现计划'
+    let suggestions = '灵感是创新的源泉，继续记录吧！';
+    if (highValueCount > totalCount * 0.5) {
+      suggestions = '高价值灵感很多，优先评估和实践这些想法！';
+    } else if (totalCount > 10) {
+      suggestions = '灵感库很丰富，可以开始筛选和规划下一步行动了。';
+    } else if (mostCategory !== '未分类') {
+      suggestions = `在“${mostCategory}”领域很有想法，可以深入探索。`;
     }
 
     setInspirationAnalysis({
       totalCount,
       mostCategory,
-      activeTime: '创意时间',
-      sources: {
-        xiaohongshu: 0,
-        shipinhao: 0,
-        others: 100
-      },
       suggestions,
       highValueCount,
-      difficultyCount
-    })
+      difficultyCount,
+      activeTime: '' // This field is not used, can be removed
+    });
   }, [inspirationData])
 
   React.useEffect(() => {
