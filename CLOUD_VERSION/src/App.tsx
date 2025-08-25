@@ -208,12 +208,12 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   // 分析心情数据并生成AI解读
   const analyzeEmotionData = (moodData: MoodPoint[]) => {
     const validScores = moodData.map(d => d.score).filter(score => score !== null) as number[];
-    if (validScores.length === 0) {
+    if (validScores.length < 2) { // Need at least 2 data points for a meaningful analysis
       setAiAnalysis({
         timePeriod: '最近7天',
         summary: '暂无足够数据进行分析',
         causes: '请先记录您的情绪',
-        suggestions: '开始记录后，AI将为您提供分析和建议',
+        suggestions: '至少需要两条记录才能生成分析',
         positiveRatio: 0,
         recoveryScore: 0
       });
@@ -221,38 +221,55 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
     }
 
     const avgScore = validScores.reduce((a, b) => a + b, 0) / validScores.length;
-    const positiveCount = validScores.filter(s => s > 0).length;
-    const positiveRatio = Math.round((positiveCount / validScores.length) * 100);
-    
+    const positiveRatio = Math.round((validScores.filter(s => s > 0).length / validScores.length) * 100);
     const variance = validScores.reduce((acc, score) => acc + Math.pow(score - avgScore, 2), 0) / validScores.length;
     const volatility = Math.sqrt(variance);
+
+    // 趋势分析
+    const midPoint = Math.ceil(validScores.length / 2);
+    const firstHalf = validScores.slice(0, midPoint);
+    const secondHalf = validScores.slice(midPoint);
+    const firstHalfAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const secondHalfAvg = secondHalf.length > 0 ? secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length : firstHalfAvg;
     
-    let summary = '';
-    if (volatility > 2) {
-      summary = '情绪波动较大，需要关注情绪稳定性';
-    } else if (volatility > 1) {
-      summary = '情绪有一定波动，但整体趋势向好';
-    } else {
-      summary = '情绪相对稳定，保持得不错';
+    let trendText = '，情绪保持平稳';
+    if (secondHalfAvg > firstHalfAvg + 0.5) {
+      trendText = '，整体呈上升趋势';
+    } else if (secondHalfAvg < firstHalfAvg - 0.5) {
+      trendText = '，但近期有所回落';
     }
 
+    // 总结
+    let summary = '';
+    if (volatility > 1.8) {
+      summary = '情绪波动较大' + trendText;
+    } else if (volatility > 1) {
+      summary = '情绪有一定波动' + trendText;
+    } else {
+      summary = '情绪相对稳定' + trendText;
+    }
+
+    // 归因
     const negativeEvents = moodData.filter(d => d.score !== null && d.score < 0 && d.event).map(d => d.event);
     let causes = '暂无明显负面触发因素';
     if (negativeEvents.length > 0) {
-      const commonWords = ['工作', '压力', '加班', '担忧', '疲惫'];
+      const commonWords = ['工作', '压力', '加班', '担忧', '疲惫', '会议'];
       const foundCauses = commonWords.filter(word => 
         negativeEvents.some(event => event?.includes(word))
       );
       if (foundCauses.length > 0) {
-        causes = `${foundCauses.join('、')}可能是主要负面触发源`;
+        causes = `“${foundCauses.join('”、“')}”可能是主要的情绪影响因素`;
       }
     }
 
-    let suggestions = '继续保持当前良好状态';
-    if (avgScore < 0) {
-      suggestions = '建议增加放松活动，并与朋友或家人沟通';
-    } else if (volatility > 1.5) {
-      suggestions = '尝试建立情绪调节机制，如冥想或规律作息';
+    // 建议
+    let suggestions = '继续保持，一切顺利！';
+    if (secondHalfAvg < firstHalfAvg - 0.5) {
+      suggestions = '近期情绪有所下滑，建议关注休息，安排一些放松的活动。';
+    } else if (volatility > 1.8) {
+      suggestions = '情绪波动较大，尝试通过运动或冥想来稳定心绪。';
+    } else if (avgScore < 0) {
+      suggestions = '整体情绪偏低，可以主动与朋友聊聊或进行户外活动。';
     }
 
     const recoveryScore = Math.max(1, Math.min(10, 5 + avgScore + (positiveRatio / 20)));
@@ -545,35 +562,59 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
 
   // 分析健身数据并生成AI解读
   const analyzeLifeData = (lifeData: LifeBar[]) => {
-    const totalMinutes = lifeData.reduce((sum, item) => sum + item.duration, 0)
-    const totalCalories = lifeData.reduce((sum, item) => sum + item.calories, 0)
-    const workoutDays = lifeData.filter(item => item.duration > 0).length
-    const types = new Set(lifeData.flatMap(item => splitTypes(item.type)))
-    const typesCount = types.size
-
-    let summary = '近期缺乏运动，需要开始规划了。'
-    if (workoutDays > 4) {
-      summary = '运动非常规律，习惯保持得很好！'
-    } else if (workoutDays > 2) {
-      summary = '保持了一定的运动频率，值得鼓励。'
-    } else if (workoutDays > 0) {
-      summary = '运动频率较低，可以适当增加。'
+    const workoutData = lifeData.filter(item => item.duration > 0);
+    if (workoutData.length === 0) {
+      setLifeAnalysis({
+        summary: '暂无运动记录',
+        status: '开始记录你的第一次运动吧！',
+        suggestions: '可以从散步或快走开始，迈出第一步。',
+        typesCount: 0,
+        totalCalories: 0,
+        totalMinutes: 0
+      });
+      return;
     }
 
-    let status = '主要以有氧运动为主。'
-    if (types.has('力量训练') && types.has('有氧运动')) {
-      status = '综合训练，有氧和力量结合得不错。'
+    const totalMinutes = workoutData.reduce((sum, item) => sum + item.duration, 0);
+    const totalCalories = workoutData.reduce((sum, item) => sum + item.calories, 0);
+    const workoutDays = workoutData.length;
+    const avgMinutes = totalMinutes / workoutDays;
+    const types = new Set(workoutData.flatMap(item => splitTypes(item.type)));
+    const typesCount = types.size;
+
+    // 总结
+    let summary = '';
+    if (workoutDays >= 5) {
+      summary = `本周运动了 ${workoutDays} 天，非常棒！`;
+    } else if (workoutDays >= 3) {
+      summary = `本周运动了 ${workoutDays} 天，保持得不错。`;
+    } else {
+      summary = `本周运动了 ${workoutDays} 天，要继续加油哦。`;
+    }
+    summary += `总时长 ${totalMinutes} 分钟。`;
+
+    // 状态
+    let status = '运动类型比较单一。';
+    if (typesCount > 2) {
+      status = `包含 ${typesCount} 种运动，非常多样化！`;
+    } else if (types.has('力量训练') && types.has('有氧运动')) {
+      status = '有氧和力量训练结合，很科学。';
+    } else if (types.has('有氧运动')) {
+      status = '主要以有氧运动为主。';
     } else if (types.has('力量训练')) {
-      status = '主要以力量训练为主。'
+      status = '主要以力量训练为主。';
     }
 
-    let suggestions = '建议从每周2-3次有氧运动开始。'
-    if (totalMinutes > 200) {
-      suggestions = '运动量充足，可考虑增加训练强度或尝试新运动。'
-    } else if (totalMinutes > 90) {
-      suggestions = '运动量适中，建议保持并逐步增加时长。'
-    } else if (totalMinutes > 30) {
-      suggestions = '运动量较少，可以适当增加每次的运动时长。'
+    // 建议
+    let suggestions = '';
+    if (totalMinutes < 60) {
+      suggestions = '运动量有待提高，尝试将每次运动时长增加到30分钟以上。';
+    } else if (typesCount === 1 && totalMinutes > 120) {
+      suggestions = '运动量很棒！可以尝试加入其他类型的运动，如瑜伽或力量训练，让身体得到更全面的发展。';
+    } else if (avgMinutes > 45 && workoutDays >=3) {
+      suggestions = '你的运动习惯非常出色！可以挑战一下新的运动目标或增加训练强度。';
+    } else {
+      suggestions = '保持当前的运动节奏，你做得很好！';
     }
 
     setLifeAnalysis({
@@ -583,7 +624,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
       typesCount,
       totalCalories,
       totalMinutes
-    })
+    });
   }
 
   // 颜色映射与 Tooltip 渲染（将"运动种类"以色块区分）
@@ -960,21 +1001,23 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
         // 生成完整的7天数据，包含空的占位符
         const completeWeekData = generateCompleteStudyWeekData(chartData, dateRange)
         setStudyBars(completeWeekData)
-        analyzeStudyData(chartData)
+        analyzeStudyData(chartData, dateRange)
       } catch (e) {
         setStudyBars([])
+        analyzeStudyData([], dateRange)
       }
     }
     load()
   }, [dateRange])
 
   // 分析学习数据并生成AI解读
-  const analyzeStudyData = (studyItems: StudyBar[]) => {
-    if (studyItems.length === 0) {
+  const analyzeStudyData = (studyItems: StudyBar[], dateRange: {from: string, to: string}) => {
+    const studyData = studyItems.filter(item => item.hours > 0);
+    if (studyData.length === 0) {
       setStudyAnalysis({
-        summary: '暂无学习数据',
+        summary: '暂无学习记录',
         timeInfo: '0小时',
-        suggestions: '开始记录你的学习吧！',
+        suggestions: '“书山有路勤为径”，开始记录你的学习吧！',
         totalHours: 0,
         totalMinutes: 0,
         dailyAverage: 0
@@ -982,36 +1025,39 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
       return;
     }
 
-    const totalHoursRaw = studyItems.reduce((sum, item) => sum + item.hours, 0);
-    const totalHours = Number(totalHoursRaw.toFixed(2));
-    const totalMinutes = Math.round(totalHoursRaw * 60);
-    const uniqueDays = new Set(studyItems.map(item => item.date)).size;
-    const dailyAverage = uniqueDays > 0 ? Number((totalHoursRaw / uniqueDays).toFixed(2)) : 0;
+    const totalHours = Number(studyData.reduce((sum, item) => sum + item.hours, 0).toFixed(2));
+    const totalMinutes = Math.round(totalHours * 60);
+    const studyDays = new Set(studyData.map(item => item.date)).size;
     
-    const categoryStats = studyItems.reduce((acc, item) => {
+    // 计算时间范围内的总天数
+    const totalDaysInRange = (new Date(dateRange.to).getTime() - new Date(dateRange.from).getTime()) / (1000 * 3600 * 24) + 1;
+    const dailyAverage = Number((totalHours / totalDaysInRange).toFixed(2));
+
+    const categoryStats = studyData.reduce((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + item.hours;
       return acc;
     }, {} as Record<string, number>);
     
     const sortedCategories = Object.entries(categoryStats).sort((a, b) => b[1] - a[1]);
     const topCategory = sortedCategories[0]?.[0] || '未知';
-    const secondCategory = sortedCategories[1]?.[0];
     
-    let summary = `${topCategory}是主要学习方向`;
-    if (secondCategory) {
-      summary += `，其次是${secondCategory}`;
+    let summary = `主要学习了“${topCategory}”`;
+    if (sortedCategories.length > 1) {
+      summary += `，同时涉猎了 ${sortedCategories.length - 1} 个其他领域`;
     }
     summary += '。';
 
-    const timeInfo = `${totalHours.toFixed(2)}小时（平均每日${dailyAverage.toFixed(2)}小时）`;
+    const timeInfo = `${totalHours}小时（平均每日约${dailyAverage}小时）`;
 
-    let suggestions = '学习规划合理，请继续保持。';
+    let suggestions = '学习状态很棒，继续保持！';
     if (dailyAverage < 0.5) {
-      suggestions = '学习时间较少，建议每天至少投入半小时。';
-    } else if (dailyAverage > 3) {
-      suggestions = '学习投入非常充足，注意劳逸结合，避免过度疲劳。';
-    } else if (sortedCategories.length > 3) {
-        suggestions = '学习领域广泛，建议适当聚焦，深入学习核心领域。'
+      suggestions = '学习投入有待加强，尝试每天安排固定的学习时间。';
+    } else if (studyDays <= 2 && totalHours > 5) {
+      suggestions = '学习时间集中，可以尝试分散到更多天，效果可能更好。';
+    } else if (sortedCategories.length > 3 && totalHours < 7) {
+      suggestions = '学习领域较广，但总时长有限，建议适当聚焦，逐个攻破。';
+    } else if (dailyAverage > 2.5) {
+      suggestions = '学习投入非常充足，注意与实践相结合，并保证充足休息。';
     }
 
     setStudyAnalysis({
@@ -1325,10 +1371,11 @@ function WorkCompletion({ onAIClick, ...props }: any) {
 
   // 分析工作数据并生成AI解读
   const analyzeWorkData = (tasks: WorkTask[]) => {
-    if (tasks.length === 0) {
+    const workData = tasks.filter(t => t.estimatedHours > 0);
+    if (workData.length === 0) {
       setWorkAnalysis({
-        summary: '暂无工作数据',
-        suggestions: '开始记录你的工作任务吧！',
+        summary: '暂无有效工作记录',
+        suggestions: '“千里之行，始于足下”，开始记录你的工作任务吧！',
         totalTasks: 0,
         completedTasks: 0,
         avgDuration: 0
@@ -1336,12 +1383,13 @@ function WorkCompletion({ onAIClick, ...props }: any) {
       return;
     }
 
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => new Date(t.date) < new Date()).length; // Assuming tasks before today are completed
-    const totalHours = tasks.reduce((sum, t) => sum + t.estimatedHours, 0);
-    const avgDuration = totalTasks > 0 ? totalHours / totalTasks : 0;
+    const totalTasks = workData.length;
+    const completedTasks = workData.filter(t => new Date(t.endDate) < new Date()).length;
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const totalHours = workData.reduce((sum, t) => sum + t.estimatedHours, 0);
+    const avgDuration = totalTasks > 0 ? Number((totalHours / totalTasks).toFixed(1)) : 0;
 
-    const typeStats = tasks.reduce((acc, task) => {
+    const typeStats = workData.reduce((acc, task) => {
       acc[task.taskType] = (acc[task.taskType] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -1349,18 +1397,21 @@ function WorkCompletion({ onAIClick, ...props }: any) {
     const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1] - a[1]);
     const mainTaskType = sortedTypes[0]?.[0] || '未分类';
 
-    let summary = `共记录了 ${totalTasks} 个任务，主要集中在 ${mainTaskType} 领域。`;
-    if (completedTasks > 0) {
-      summary += ` 已完成 ${completedTasks} 个。`;
+    let summary = `共 ${totalTasks} 项任务，主要为“${mainTaskType}”。`;
+    if (totalTasks > 0) {
+      summary += ` 完成率为 ${completionRate}%。`;
     }
 
-    let suggestions = '任务规划合理，请继续保持。';
-    if (avgDuration > 8) {
-      suggestions = '平均任务耗时较长，建议将大任务拆解成更小的步骤。';
-    } else if (totalTasks > 10 && avgDuration < 2) {
-      suggestions = '任务数量多但平均耗时短，注意任务切换的成本。';
-    } else if (tasks.some(t => t.priority === '高')) {
-        suggestions = '存在高优先级任务，请优先处理，确保项目进度。'
+    let suggestions = '项目规划清晰，执行有力，继续保持！';
+    const highPriorityTasks = workData.filter(t => t.priority === '高').length;
+    if (highPriorityTasks > totalTasks * 0.5) {
+      suggestions = `高优先级任务占比较高（${highPriorityTasks}项），请注意风险管理，确保核心任务按时完成。`;
+    } else if (avgDuration > 10) {
+      suggestions = '部分任务平均耗时较长，可考虑将其拆解为更小的子任务，以便更好地跟踪和管理。';
+    } else if (completionRate < 50 && totalTasks > 5) {
+      suggestions = '项目仍在初期阶段，建议重点关注任务的优先级排序，确保关键路径不受阻。';
+    } else if (workData.some(t => t.complexity === '高')) {
+      suggestions = '项目中包含高复杂度任务，建议投入更多资源，并设置明确的里程碑。';
     }
 
     setWorkAnalysis({
@@ -1368,7 +1419,7 @@ function WorkCompletion({ onAIClick, ...props }: any) {
       suggestions,
       totalTasks,
       completedTasks,
-      avgDuration: Math.round(avgDuration * 10) / 10
+      avgDuration
     });
   }
 
@@ -1638,7 +1689,6 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
   const [inspirationAnalysis, setInspirationAnalysis] = React.useState({
     totalCount: 0,
     mostCategory: '...',
-    activeTime: '...',
     suggestions: '正在分析...',
     highValueCount: 0,
     difficultyCount: {}
@@ -1646,22 +1696,22 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
 
   // 分析灵感数据并生成AI解读
   const analyzeInspirationData = React.useCallback(() => {
-    if (inspirationData.length === 0) {
+    const inspirationDataFiltered = inspirationData.filter(item => item.inspiration_description);
+    if (inspirationDataFiltered.length === 0) {
       setInspirationAnalysis({
         totalCount: 0,
         mostCategory: '无',
-        suggestions: '开始记录你的灵感吧！',
+        suggestions: '“灵感买不来，但它爱光顾勤劳的头脑。” 开始记录吧！',
         highValueCount: 0,
-        difficultyCount: {},
-        activeTime: ''
+        difficultyCount: {}
       });
       return;
     }
 
-    const totalCount = inspirationData.length;
+    const totalCount = inspirationDataFiltered.length;
     
     const categoryCount: Record<string, number> = {};
-    inspirationData.forEach(item => {
+    inspirationDataFiltered.forEach(item => {
       const theme = item.inspiration_theme || '未分类';
       categoryCount[theme] = (categoryCount[theme] || 0) + 1;
     });
@@ -1669,23 +1719,27 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
     const mostCategory = Object.entries(categoryCount).sort(([,a], [,b]) => b - a)[0]?.[0] || '未分类';
 
     const difficultyCount: Record<string, number> = {};
-    inspirationData.forEach(item => {
+    inspirationDataFiltered.forEach(item => {
       const difficulty = item.inspiration_difficulty || '中';
       difficultyCount[difficulty] = (difficultyCount[difficulty] || 0) + 1;
     });
 
-    const highValueCount = inspirationData.filter(item => 
+    const highValueCount = inspirationDataFiltered.filter(item => 
       item.inspiration_difficulty === '高' || 
       (item.inspiration_theme && ['AI工具开发', '金融科技', '自动化流程'].includes(item.inspiration_theme))
     ).length;
 
-    let suggestions = '灵感是创新的源泉，继续记录吧！';
-    if (highValueCount > totalCount * 0.5) {
-      suggestions = '高价值灵感很多，优先评估和实践这些想法！';
-    } else if (totalCount > 10) {
-      suggestions = '灵感库很丰富，可以开始筛选和规划下一步行动了。';
-    } else if (mostCategory !== '未分类') {
-      suggestions = `在“${mostCategory}”领域很有想法，可以深入探索。`;
+    let suggestions = '你的创造力很活跃，继续保持！';
+    const highValueRatio = totalCount > 0 ? highValueCount / totalCount : 0;
+
+    if (highValueRatio > 0.5) {
+      suggestions = '高价值灵感占比很高，你正走在创新的前沿！建议挑选一两个进行深度可行性分析。';
+    } else if (difficultyCount['高'] > 3) {
+      suggestions = '你的想法很有挑战性！尝试将这些“大想法”拆解成小步骤，让它们更容易启动。';
+    } else if (totalCount > 10 && highValueRatio < 0.2) {
+      suggestions = '灵感数量充沛，是时候进行筛选了。思考一下哪些想法能产生最大价值或最让你兴奋。';
+    } else if (mostCategory !== '未分类' && (categoryCount[mostCategory] / totalCount) > 0.6) {
+      suggestions = `你对“${mostCategory}”领域有非常集中的思考，这可能是一个值得深耕的绝佳机会。`;
     }
 
     setInspirationAnalysis({
@@ -1693,8 +1747,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
       mostCategory,
       suggestions,
       highValueCount,
-      difficultyCount,
-      activeTime: '' // This field is not used, can be removed
+      difficultyCount
     });
   }, [inspirationData])
 
