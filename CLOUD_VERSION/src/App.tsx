@@ -529,7 +529,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
 
   const [lifeAnalysis, setLifeAnalysis] = React.useState({
     summary: '运动习惯良好，运动安排合理',
-    causes: '运动类型多样，健身计划执行良好',
+    status: '运动类型多样，健身计划执行良好',
     suggestions: '保持当前运动频率，可适当增加力量训练',
     typesCount: 0,
     totalCalories: 0,
@@ -538,6 +538,49 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
 
   function parseNumber(s?: string): number {
     if (!s) return 0; const m = String(s).match(/\d+/); return m ? Number(m[0]) : 0
+  }
+
+  // 分析健身数据并生成AI解读
+  const analyzeLifeData = (lifeData: LifeBar[]) => {
+    const totalMinutes = lifeData.reduce((sum, item) => sum + item.duration, 0)
+    const totalCalories = lifeData.reduce((sum, item) => sum + item.calories, 0)
+    const workoutDays = lifeData.filter(item => item.duration > 0).length
+    const types = new Set(lifeData.flatMap(item => splitTypes(item.type)))
+    const typesCount = types.size
+
+    let summary = '近期缺乏运动，需要开始规划了。'
+    if (workoutDays > 4) {
+      summary = '运动非常规律，习惯保持得很好！'
+    } else if (workoutDays > 2) {
+      summary = '保持了一定的运动频率，值得鼓励。'
+    } else if (workoutDays > 0) {
+      summary = '运动频率较低，可以适当增加。'
+    }
+
+    let status = '主要以有氧运动为主。'
+    if (types.has('力量训练') && types.has('有氧运动')) {
+      status = '综合训练，有氧和力量结合得不错。'
+    } else if (types.has('力量训练')) {
+      status = '主要以力量训练为主。'
+    }
+
+    let suggestions = '建议从每周2-3次有氧运动开始。'
+    if (totalMinutes > 200) {
+      suggestions = '运动量充足，可考虑增加训练强度或尝试新运动。'
+    } else if (totalMinutes > 90) {
+      suggestions = '运动量适中，建议保持并逐步增加时长。'
+    } else if (totalMinutes > 30) {
+      suggestions = '运动量较少，可以适当增加每次的运动时长。'
+    }
+
+    setLifeAnalysis({
+      summary,
+      status,
+      suggestions,
+      typesCount,
+      totalCalories,
+      totalMinutes
+    })
   }
 
   // 颜色映射与 Tooltip 渲染（将"运动种类"以色块区分）
@@ -612,19 +655,12 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
         console.log('健身打卡数据:', finalData) // 调试输出
         setBars(finalData)
 
-        // 简单分析
-        const diversity = new Set(mapped.flatMap(m=>splitTypes(m.type)).filter(Boolean)).size
-        const totalCal = mapped.reduce((s,m)=>s+m.calories,0)
-        const totalMin = mapped.reduce((s,m)=>s+m.duration,0)
-        setLifeAnalysis(v => ({
-          ...v,
-          typesCount: diversity,
-          totalCalories: totalCal,
-          totalMinutes: totalMin
-        }))
+        analyzeLifeData(mapped)
       } catch (e) {
         console.warn('API请求失败，使用默认测试数据', e)
-        setBars(generateDefaultTestData())
+        const fallbackData = generateDefaultTestData()
+        setBars(fallbackData)
+        analyzeLifeData(fallbackData)
       }
     }
     load()
@@ -695,7 +731,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
           </div>
           <div className="space-y-3 flex-1 overflow-auto">
             <div className="flex items-start gap-3"><span className="text-sm mt-1">🏃‍♂️</span><div><div className="text-sm font-medium text-slate-700">运动总结：{lifeAnalysis.summary}</div></div></div>
-            <div className="flex items-start gap-3"><span className="text-sm mt-1">💪</span><div><div className="text-sm font-medium text-slate-700">健身状态：{lifeAnalysis.causes}</div></div></div>
+            <div className="flex items-start gap-3"><span className="text-sm mt-1">💪</span><div><div className="text-sm font-medium text-slate-700">健身状态：{lifeAnalysis.status}</div></div></div>
             <div className="flex items-start gap-3"><span className="text-sm mt-1">💡</span><div><div className="text-sm font-medium text-slate-700">建议：{lifeAnalysis.suggestions}</div></div></div>
           </div>
         </div>
