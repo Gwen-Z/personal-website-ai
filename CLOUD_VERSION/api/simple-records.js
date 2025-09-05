@@ -42,7 +42,13 @@ export default async function handler(req, res) {
     }
 
     // 查询数据
-    const records = await selectAll('simple_records', whereClause, params);
+    let records = await selectAll('simple_records', whereClause, params);
+
+    // 兼容历史字段：若 life_description 为空，则使用 fitness_description 填充展示
+    records = records.map(r => ({
+      ...r,
+      life_description: r.life_description || r.fitness_description || '',
+    }));
 
     // 统计信息
     const stats = {
@@ -69,7 +75,7 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`✅ 返回 ${records.length} 条记录`);
+    console.log(`✅ 返回 ${records.length} 条记录（含life_description回退兼容）`);
     res.status(200).json({ 
       records, 
       stats,

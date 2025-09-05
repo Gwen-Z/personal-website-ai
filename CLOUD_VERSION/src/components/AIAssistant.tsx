@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import apiClient from '../apiClient'
 import { format, addDays, differenceInCalendarDays, min as dmin, max as dmax, parseISO } from 'date-fns'
 
 type TabId = 'radar' | 'emotion' | 'life' | 'study' | 'work' | 'inspiration'
@@ -451,11 +451,11 @@ export default function AnalyticsTabs() {
       const params: any = {}
       if (from) params.from = from
       if (to) params.to = to
-      const response = await axios.get('/api/simple-records', { params })
+      const response = await apiClient.get('/api/simple-records', { params })
       setData(Array.isArray(response.data) ? response.data : [])
 
       // AI 解读（优先使用 from/to）
-      const ai = await axios.get('/api/ai-analysis', { params })
+      const ai = await apiClient.get('/api/ai-analysis', { params })
       setAiSummary(ai.data)
     } catch (error) {
       console.error('加载数据失败:', error)

@@ -67,11 +67,11 @@ export default function RawDataPage() {
       const data: { date: string; description: string }[] = []
 
       for (const line of lines) {
-        const parts = line.split(',').map(p => p.trim())
-        if (parts.length >= 2) {
-          const date = parts[0]
-          const description = parts[1]
-          
+        const firstCommaIndex = line.indexOf(',')
+        if (firstCommaIndex !== -1) {
+          const date = line.substring(0, firstCommaIndex).trim()
+          const description = line.substring(firstCommaIndex + 1).trim()
+
           if (date && description) {
             data.push({ date, description })
           }

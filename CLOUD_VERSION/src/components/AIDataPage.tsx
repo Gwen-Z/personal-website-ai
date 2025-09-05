@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import apiClient from '../apiClient'
 
 type SimpleRecordItem = {
   id: number
@@ -11,6 +11,15 @@ type SimpleRecordItem = {
   study_description?: string
   work_description?: string
   inspiration_description?: string
+}
+
+type RawEdit = {
+  date?: string
+  mood_text?: string
+  fitness_text?: string
+  study_text?: string
+  work_text?: string
+  inspiration_text?: string
 }
 
 
@@ -32,7 +41,7 @@ export default function AIDataPage() {
   const [adding, setAdding] = useState(false)
 
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editing, setEditing] = useState<Partial<RawTextItem>>({})
+  const [editing, setEditing] = useState<Partial<RawEdit>>({})
   const [savingId, setSavingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -42,7 +51,7 @@ export default function AIDataPage() {
       const params: any = {}
       if (from) params.from = from
       if (to) params.to = to
-      const { data } = await axios.get(`/api/simple-records`, { params })
+      const { data } = await apiClient.get(`/api/simple-records`, { params })
       setItems(Array.isArray(data.records) ? data.records : [])
     } finally {
       setLoading(false)
@@ -52,6 +61,19 @@ export default function AIDataPage() {
   useEffect(() => { 
     load() 
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 窗口聚焦自动刷新
+  useEffect(() => {
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
+  // 15秒轮询刷新
+  useEffect(() => {
+    const t = setInterval(() => load(), 15000)
+    return () => clearInterval(t)
+  }, [])
 
   const filteredItems = useMemo(() => {
     if (!keyword) return items;
@@ -78,11 +100,26 @@ export default function AIDataPage() {
       return
     }
     
+    // 解析文本内容
+    const lines = newEntry.description.split('\n');
+    const data = {
+      date: newEntry.date,
+      mood_text: lines.find(l => l.startsWith('心情:'))?.replace('心情:', '').trim() || '',
+      life_text: lines.find(l => l.startsWith('健身:'))?.replace('健身:', '').trim() || '',
+      study_text: lines.find(l => l.startsWith('学习:'))?.replace('学习:', '').trim() || '',
+      work_text: lines.find(l => l.startsWith('工作:'))?.replace('工作:', '').trim() || '',
+      inspiration_text: lines.find(l => l.startsWith('灵感:'))?.replace('灵感:', '').trim() || '',
+    };
+    
+    // 验证至少有一个字段有内容
+    if (!data.mood_text && !data.life_text && !data.study_text && !data.work_text && !data.inspiration_text) {
+      alert('请至少输入一个维度的内容（心情、健身、学习、工作或灵感）')
+      return
+    }
+    
     setAdding(true)
     try {
-      const rawText = `日期：${newEntry.date}\n${newEntry.description}`
-      // 对应后端实际存在的接口文件 api/raw-entry.js
-      await axios.post('/api/raw-entry', { raw_text: rawText })
+      await apiClient.post('/api/raw-entry', data)
       setNewEntry({
         date: new Date().toISOString().slice(0, 10),
         description: ''
@@ -96,13 +133,13 @@ export default function AIDataPage() {
     }
   }
 
-  function startEdit(item: RawTextItem) {
+  function startEdit(item: SimpleRecordItem) {
     setEditingId(item.id)
     setEditing({ ...item })
   }
 
   async function saveEdit(id: number) {
-    const body = {
+    const body: RawEdit = {
       date: editing.date,
       mood_text: editing.mood_text || '',
       fitness_text: editing.fitness_text || '',
@@ -110,24 +147,13 @@ export default function AIDataPage() {
       work_text: editing.work_text || '',
       inspiration_text: editing.inspiration_text || '',
     }
-    const prev = items
-    const optimistic = items.map(i => i.id === id ? {
-      ...i,
-      date: String(body.date || i.date),
-      mood_text: body.mood_text,
-      fitness_text: body.fitness_text,
-      study_text: body.study_text,
-      work_text: body.work_text,
-      inspiration_text: body.inspiration_text,
-    } : i)
     setSavingId(id)
-    setItems(optimistic)
     try {
-      await axios.put(`/api/raw-entries/${id}`, body)
+      await apiClient.put(`/api/raw-entries/${id}`, body)
       setEditingId(null)
       setEditing({})
+      await load()
     } catch (error: any) {
-      setItems(prev)
       console.error('保存编辑失败:', error)
       alert('保存失败：' + (error.response?.data?.message || error.response?.data?.error || error.message))
     } finally {
@@ -142,7 +168,7 @@ export default function AIDataPage() {
     setDeletingId(id)
     setItems(optimistic)
     try {
-      await axios.delete(`/api/raw-entries/${id}`)
+      await apiClient.delete(`/api/raw-entries/${id}`)
       if (editingId === id) {
         setEditingId(null)
         setEditing({})
@@ -221,6 +247,7 @@ export default function AIDataPage() {
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-600 ml-2">关键词</span>
           <input placeholder="搜索内容" className="h-9 rounded-xl border px-2 text-sm" value={keyword} onChange={e=>setKeyword(e.target.value)} />
+          <button className="h-9 rounded-xl border px-3 text-sm" onClick={load}>同步</button>
         </div>
       </div>
 
@@ -255,10 +282,10 @@ export default function AIDataPage() {
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
                     {(() => {
-                      const parts = [];
+                      const parts: string[] = [];
                       if (item.fitness_type) parts.push(item.fitness_type);
-                      if (item.fitness_duration) parts.push(`${item.fitness_duration}分钟`);
-                      if (item.fitness_calories) parts.push(`${item.fitness_calories}卡`);
+                      if (item.fitness_duration) parts.push(item.fitness_duration);
+                      if (item.fitness_calories) parts.push(item.fitness_calories);
                       const fitnessText = parts.join(' ');
                       return (
                         <span className="truncate inline-block max-w-full" title={fitnessText}>

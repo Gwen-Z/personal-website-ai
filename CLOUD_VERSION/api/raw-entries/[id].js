@@ -47,7 +47,22 @@ export default async function handler(req, res) {
       ];
 
       await query(updateSql, params);
-      console.log(`✅ 更新原始记录 ID: ${id}`);
+      
+      // 同步 simple_records（按日期）
+      if (date) {
+        await query(
+          `UPDATE simple_records SET 
+            mood_description = COALESCE(?, mood_description),
+            life_description = COALESCE(?, life_description),
+            study_description = COALESCE(?, study_description),
+            work_description = COALESCE(?, work_description),
+            inspiration_description = COALESCE(?, inspiration_description)
+           WHERE date = ?`,
+          [mood_text || null, fitness_text || null, study_text || null, work_text || null, inspiration_text || null, date]
+        );
+      }
+
+      console.log(`✅ 更新原始记录 ID: ${id}（含 simple_records 同步）`);
       
       return res.status(200).json({ 
         success: true, 
@@ -56,10 +71,21 @@ export default async function handler(req, res) {
       });
 
     } else if (req.method === 'DELETE') {
-      // 删除记录
-      const deleteSql = 'DELETE FROM raw_entries WHERE id = ?';
-      await query(deleteSql, [id]);
-      console.log(`✅ 删除原始记录 ID: ${id}`);
+      // 删除前取出日期
+      const sel = await query('SELECT date FROM raw_entries WHERE id = ?', [id]);
+      let recDate = null;
+      if (sel.rows && sel.rows[0]) {
+        const columns = sel.columns; const row = sel.rows[0];
+        const obj = {}; columns.forEach((c, i) => obj[c] = row[i]);
+        recDate = obj.date || null;
+      }
+      // 删除 raw_entries
+      await query('DELETE FROM raw_entries WHERE id = ?', [id]);
+      // 同步删除 simple_records（按日期）
+      if (recDate) {
+        await query('DELETE FROM simple_records WHERE date = ?', [recDate]);
+      }
+      console.log(`✅ 删除原始记录 ID: ${id}，并同步删除 simple_records 日期=${recDate || 'N/A'}`);
       
       return res.status(200).json({ 
         success: true, 

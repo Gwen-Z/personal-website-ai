@@ -1884,7 +1884,7 @@ export default function AnalyticsTabsPage() {
               }`}
             >
               <span>🤖</span>
-              <span className="whitespace-nowrap">原始数据</span>
+              <span className="whitespace-nowrap">原始数据录入</span>
             </button>
 
           </nav>

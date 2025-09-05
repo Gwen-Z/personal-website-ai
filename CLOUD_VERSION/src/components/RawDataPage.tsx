@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import apiClient from '../apiClient'
 
 type SimpleRecordItem = {
   id: number
@@ -72,11 +72,11 @@ export default function RawDataPage() {
       const data: { date: string; description: string }[] = []
 
       for (const line of lines) {
-        const parts = line.split(',').map(p => p.trim())
-        if (parts.length >= 2) {
-          const date = parts[0]
-          const description = parts[1]
-          
+        const firstCommaIndex = line.indexOf(',')
+        if (firstCommaIndex !== -1) {
+          const date = line.substring(0, firstCommaIndex).trim()
+          const description = line.substring(firstCommaIndex + 1).trim()
+
           if (date && description) {
             data.push({ date, description })
           }
@@ -91,7 +91,7 @@ export default function RawDataPage() {
       // 根据当前分类发送到不同的API端点
       const endpoint = `${category}-data/batch`
       
-      const response = await axios.post(`/api/${endpoint}`, { data })
+      const response = await apiClient.post(`/api/${endpoint}`, { data })
       
       if (response.data.success) {
         alert(`成功上传并分析了 ${data.length} 条数据`)
@@ -114,7 +114,7 @@ export default function RawDataPage() {
       const params: any = {}
       if (from) params.from = from
       if (to) params.to = to
-      const { data } = await axios.get(`/api/simple-records`, { params })
+      const { data } = await apiClient.get(`/api/simple-records`, { params })
       // API返回 {records: [...], stats: {...}} 格式
       const records = data?.records || data || []
       setItems(Array.isArray(records) ? records : [])
@@ -181,7 +181,7 @@ export default function RawDataPage() {
     setSavingId(id)
     setItems(optimistic)
     try {
-      await axios.put(`/api/simple-records/${id}`, body)
+      await apiClient.put(`/api/simple-records/${id}`, body)
       setEditingId(null)
       setEditing({})
     } catch (error: any) {
@@ -200,7 +200,7 @@ export default function RawDataPage() {
     setDeletingId(id)
     setItems(optimistic)
     try {
-      await axios.delete(`/api/simple-records/${id}`)
+      await apiClient.delete(`/api/simple-records/${id}`)
       if (editingId === id) {
         setEditingId(null)
         setEditing({})
@@ -222,7 +222,7 @@ export default function RawDataPage() {
     const optimistic = items.filter(i => !ids.includes(i.id))
     setItems(optimistic)
     try {
-      await axios.delete('/api/simple-records/batch', { data: { ids } })
+      await apiClient.delete('/api/simple-records/batch', { data: { ids } })
       setSelected(new Set())
       setSelectAll(false)
     } catch (error: any) {

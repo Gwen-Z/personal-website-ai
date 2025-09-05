@@ -4,6 +4,7 @@ import { initDB } from './db.js';
 import AIService from './ai-service.js';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import fs from 'fs';
 
 // 加载环境变量
 dotenv.config();
@@ -449,6 +450,7 @@ app.get('/api/simple-records', async (req, res) => {
     const records = await db.all(`SELECT * FROM simple_records ${whereClause} ${orderBy}`, params);
     
     // 如果指定了类别，只返回该类别的数据
+    // Always wrap the response in an object with a 'records' key, as the frontend expects this structure.
     if (category && ['mood', 'life', 'study', 'work', 'inspiration'].includes(category)) {
       const categoryKey = category + '_description';
       const filteredRecords = records.map(record => ({
@@ -457,9 +459,9 @@ app.get('/api/simple-records', async (req, res) => {
         [categoryKey]: record[categoryKey],
         created_at: record.created_at
       }));
-      res.json(filteredRecords);
+      res.json({ records: filteredRecords });
     } else {
-      res.json(records);
+      res.json({ records: records });
     }
   } catch (error) {
     console.error('Error fetching simple records:', error);
@@ -1087,12 +1089,24 @@ function generateDefaultFitnessType(fitnessText) {
 }
 
 // 原始数据提交接口（保存文本并生成AI总结）
+const logToFile = (message) => {
+  const logMessage = `[${new Date().toISOString()}] ${message}\n`;
+  fs.appendFileSync('debug.log', logMessage);
+};
+
 app.post('/api/raw-entry', async (req, res) => {
+  logToFile('--- Received request for /api/raw-entry ---');
   try {
+    logToFile(`Request body: ${JSON.stringify(req.body, null, 2)}`);
     const { date, mood_text, life_text, study_text, work_text, inspiration_text } = req.body;
     
     if (!date) {
       return res.status(400).json({ message: 'Date is required' });
+    }
+
+    // 验证至少有一个内容字段不为空
+    if (!mood_text?.trim() && !life_text?.trim() && !study_text?.trim() && !work_text?.trim() && !inspiration_text?.trim()) {
+      return res.status(400).json({ message: 'At least one content field must not be empty' });
     }
 
     // 为心情描述生成AI总结
@@ -1103,16 +1117,38 @@ app.post('/api/raw-entry', async (req, res) => {
     // 为健身描述生成AI总结
     const fitnessSummary = await generateFitnessSummary(life_text);
 
-    // 保存到简化记录表，包含AI总结
+    // 保存到简化记录表，包含AI总结（使用 db.run + 位置占位符）
     const result = await db.run(
       'INSERT INTO simple_records (date, mood_description, life_description, study_description, work_description, inspiration_description, mood_emoji, mood_event, mood_score, mood_category, fitness_intensity, fitness_duration, fitness_calories, fitness_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [date, mood_text || '', life_text || '', study_text || '', work_text || '', inspiration_text || '', moodSummary.mood_emoji, moodSummary.mood_event, moodSummary.mood_score, moodSummary.mood_category, fitnessSummary.intensity, fitnessSummary.duration, fitnessSummary.calories, fitnessSummary.type]
+      [
+        date,
+        mood_text || '',
+        life_text || '',
+        study_text || '',
+        work_text || '',
+        inspiration_text || '',
+        moodSummary.mood_emoji,
+        moodSummary.mood_event,
+        Number(moodSummary.mood_score) || 0,
+        moodSummary.mood_category || '中性',
+        fitnessSummary.intensity || '',
+        fitnessSummary.duration || '',
+        fitnessSummary.calories || '',
+        fitnessSummary.type || ''
+      ]
     );
 
-    // 同时保存原始数据到raw_entries表（备份）
+    // 同时保存到 raw_entries（备份）
     await db.run(
       'INSERT INTO raw_entries (date, mood_text, life_text, study_text, work_text, inspiration_text) VALUES (?, ?, ?, ?, ?, ?)',
-      [date, mood_text || '', life_text || '', study_text || '', work_text || '', inspiration_text || '']
+      [
+        date,
+        mood_text || '',
+        life_text || '',
+        study_text || '',
+        work_text || '',
+        inspiration_text || ''
+      ]
     );
 
     res.status(201).json({
@@ -1136,6 +1172,7 @@ app.post('/api/raw-entry', async (req, res) => {
       }
     });
   } catch (error) {
+    logToFile(`--- ERROR in /api/raw-entry: ${error.message} ---\n${error.stack}`);
     console.error('Error saving entry:', error);
     res.status(500).json({ message: 'Failed to save entry', error: error.message });
   }

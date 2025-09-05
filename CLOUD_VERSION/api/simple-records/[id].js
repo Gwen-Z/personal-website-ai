@@ -14,7 +14,6 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'PUT') {
-      // 更新记录
       const {
         date,
         mood_description,
@@ -47,7 +46,22 @@ export default async function handler(req, res) {
       ];
 
       await query(updateSql, params);
-      console.log(`✅ 更新记录 ID: ${id}`);
+      
+      // 同步 raw_entries（按日期）
+      if (date) {
+        await query(
+          `UPDATE raw_entries SET 
+            mood_text = COALESCE(?, mood_text),
+            life_text = COALESCE(?, life_text),
+            study_text = COALESCE(?, study_text),
+            work_text = COALESCE(?, work_text),
+            inspiration_text = COALESCE(?, inspiration_text)
+           WHERE date = ?`,
+          [mood_description || null, life_description || null, study_description || null, work_description || null, inspiration_description || null, date]
+        );
+      }
+
+      console.log(`✅ 更新记录 ID: ${id}（含 raw_entries 同步）`);
       
       return res.status(200).json({ 
         success: true, 
@@ -56,10 +70,20 @@ export default async function handler(req, res) {
       });
 
     } else if (req.method === 'DELETE') {
-      // 删除记录
-      const deleteSql = 'DELETE FROM simple_records WHERE id = ?';
-      await query(deleteSql, [id]);
-      console.log(`✅ 删除记录 ID: ${id}`);
+      // 先取出日期
+      const sel = await query('SELECT date FROM simple_records WHERE id = ?', [id]);
+      let recDate = null;
+      if (sel.rows && sel.rows[0]) {
+        const columns = sel.columns; const row = sel.rows[0];
+        const obj = {}; columns.forEach((c, i) => obj[c] = row[i]);
+        recDate = obj.date || null;
+      }
+
+      await query('DELETE FROM simple_records WHERE id = ?', [id]);
+      if (recDate) {
+        await query('DELETE FROM raw_entries WHERE date = ?', [recDate]);
+      }
+      console.log(`✅ 删除记录 ID: ${id}，并同步删除 raw_entries 日期=${recDate || 'N/A'}`);
       
       return res.status(200).json({ 
         success: true, 
@@ -68,7 +92,6 @@ export default async function handler(req, res) {
       });
 
     } else if (req.method === 'GET') {
-      // 获取单个记录
       const selectSql = 'SELECT * FROM simple_records WHERE id = ?';
       const result = await query(selectSql, [id]);
       
