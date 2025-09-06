@@ -5,12 +5,12 @@ import RawDataPage from './components/RawDataPage.tsx';
 import AIDataPage from './components/AIDataPage.tsx';
 import AIModal from './components/AIModal.tsx';
 import TimelineBubbleChart from './components/TimelineBubbleChart.tsx';
-import NotesPage from './components/NotesPage.tsx'; // Import the new NotesPage component
+import NotesPage from './components/NotesPage.tsx';
 
 // Type definitions
 type TabId = 'emotion' | 'life' | 'study' | 'work' | 'inspiration';
 type DataSubTab = 'raw' | 'ai';
-type ViewType = 'category' | 'data' | 'notes'; // Add 'notes' to view types
+type ViewType = 'category' | 'data' | 'notes';
 
 interface Notebook {
   id: number;
@@ -190,7 +190,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
       if (/(难过|差|烦|压力|😣|😟|烦躁|卡死|慌)/.test(s)) return -1;
       if (/(一般|平静|普通|还行|😐|平稳)/.test(s)) return 0;
       if (/(不错|开心|愉快|良好|🙂|😀|回升)/.test(s)) return 2;
-      if (/(很好|超好|兴奋|激动|优秀|😄|🎉|挺不错)/.test(s)) return 4;
+[object Object])) return 4;
       return 0;
     }
     async function load() {
@@ -253,8 +253,8 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
             <div className="flex items-start gap-3"><span className="text-sm mt-1">💡</span><div><div className="text-sm font-medium text-slate-700">情绪总结：{aiAnalysis.summary}</div></div></div>
             <div className="flex items-start gap-3"><span className="text-sm mt-1">🔍</span><div><div className="text-sm font-medium text-slate-700">情绪归因：{aiAnalysis.causes}</div></div></div>
             <div className="flex items-start gap-3"><span className="text-sm mt-1">⚠️</span><div><div className="text-sm font-medium text-slate-700">建议：{aiAnalysis.suggestions}</div></div></div>
-              </div>
-            </div>
+          </div>
+        </div>
         <div className="space-y-4 min-h-[180px] flex flex-col justify-between">
           <div className="bg-white border border-slate-200 rounded-xl p-4 text-center flex-1 flex flex-col justify-center">
             <div className="flex items-center gap-1 justify-center mb-2"><span className="text-2xl">😊</span></div>
@@ -272,17 +272,17 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   );
 }
 
-function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) { return <div>Life Timeline</div>; }
-function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) { return <div>Study Time Dist</div>; }
-function WorkCompletion({ onAIClick }: { onAIClick?: () => void }) { return <div>Work Completion</div>; }
-function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) { return <div>Inspiration Notes</div>; }
+function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) { return <div>Life Timeline Content</div>; }
+function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) { return <div>Study Time Dist Content</div>; }
+function WorkCompletion({ onAIClick }: { onAIClick?: () => void }) { return <div>Work Completion Content</div>; }
+function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) { return <div>Inspiration Notes Content</div>; }
 
 // Main App Component
 export default function AnalyticsTabsPage() {
   const [active, setActive] = useState<TabId>('emotion');
   const [catOpen, setCatOpen] = useState(true);
   const [dataOpen, setDataOpen] = useState(true);
-  const [notesOpen, setNotesOpen] = useState(true); // State for the new notes section
+  const [notesOpen, setNotesOpen] = useState(true);
   const [dataActive, setDataActive] = useState<DataSubTab>('raw');
   const [view, setView] = useState<ViewType>('category');
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -290,7 +290,6 @@ export default function AnalyticsTabsPage() {
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [activeNotebookId, setActiveNotebookId] = useState<number | null>(null);
 
-  // Fetch notebooks on component mount
   useEffect(() => {
     const fetchNotebooks = async () => {
       try {
@@ -335,9 +334,7 @@ export default function AnalyticsTabsPage() {
           onClick={() => setCatOpen(v => !v)}
           className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm bg-slate-50 hover:bg-slate-100"
         >
-          <span className="flex items-center gap-2">
-            <span>{catOpen ? '📂' : '📁'}</span>
-            <span className="font-medium text-slate-700">分类</span>
+          <span className="flex items-center gap-[object Object]font-medium text-slate-700">分类</span>
           </span>
           <span className="text-slate-400">{catOpen ? '▾' : '▸'}</span>
         </button>
