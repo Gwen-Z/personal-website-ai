@@ -253,8 +253,8 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
             <div className="flex items-start gap-3"><span className="text-sm mt-1">💡</span><div><div className="text-sm font-medium text-slate-700">情绪总结：{aiAnalysis.summary}</div></div></div>
             <div className="flex items-start gap-3"><span className="text-sm mt-1">🔍</span><div><div className="text-sm font-medium text-slate-700">情绪归因：{aiAnalysis.causes}</div></div></div>
             <div className="flex items-start gap-3"><span className="text-sm mt-1">⚠️</span><div><div className="text-sm font-medium text-slate-700">建议：{aiAnalysis.suggestions}</div></div></div>
-          </div>
-        </div>
+              </div>
+            </div>
         <div className="space-y-4 min-h-[180px] flex flex-col justify-between">
           <div className="bg-white border border-slate-200 rounded-xl p-4 text-center flex-1 flex flex-col justify-center">
             <div className="flex items-center gap-1 justify-center mb-2"><span className="text-2xl">😊</span></div>
