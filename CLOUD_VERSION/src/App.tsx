@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, Brush, Cell } from 'recharts';
 import RawDataPage from './components/RawDataPage.tsx';
@@ -190,7 +190,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
       if (/(难过|差|烦|压力|😣|😟|烦躁|卡死|慌)/.test(s)) return -1;
       if (/(一般|平静|普通|还行|😐|平稳)/.test(s)) return 0;
       if (/(不错|开心|愉快|良好|🙂|😀|回升)/.test(s)) return 2;
-[object Object])) return 4;
+      if (/(很好|超好|兴奋|激动|优秀|😄|🎉|挺不错)/.test(s)) return 4;
       return 0;
     }
     async function load() {
@@ -334,7 +334,9 @@ export default function AnalyticsTabsPage() {
           onClick={() => setCatOpen(v => !v)}
           className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm bg-slate-50 hover:bg-slate-100"
         >
-          <span className="flex items-center gap-[object Object]font-medium text-slate-700">分类</span>
+          <span className="flex items-center gap-2">
+            <span>{catOpen ? '📂' : '📁'}</span>
+            <span className="font-medium text-slate-700">分类</span>
           </span>
           <span className="text-slate-400">{catOpen ? '▾' : '▸'}</span>
         </button>
