@@ -155,7 +155,10 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
   // 自定义X轴标签格式（日期）
   const formatXAxisLabel = (tickItem: number) => {
     const date = new Date(tickItem);
-    return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+    // 使用UTC时间避免时区问题
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${month}/${day}`;
   };
 
   // 自定义Y轴标签（主题类别）
@@ -190,8 +193,9 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
     let maxDateMs: number | null = null;
 
     if (from && to) {
-      minDateMs = new Date(from).getTime();
-      maxDateMs = new Date(to).getTime();
+      // 使用UTC时间避免时区问题
+      minDateMs = new Date(from + 'T00:00:00.000Z').getTime();
+      maxDateMs = new Date(to + 'T00:00:00.000Z').getTime();
     } else if (bubbleData.length > 0) {
       const dataDateValues = bubbleData.map(item => item.x);
       minDateMs = Math.min(...dataDateValues);
@@ -206,7 +210,8 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
     const endDate = new Date(maxDateMs);
     while (currentDate <= endDate) {
       ticks.push(currentDate.getTime());
-      currentDate.setDate(currentDate.getDate() + 1);
+      // 使用UTC日期避免时区问题
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
     // 计算 domain，确保视觉边距
@@ -218,7 +223,7 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
   }, [bubbleData, from, to]);
 
   // 获取Y轴范围 - 从0开始，等距分布，增加顶部边距
-  const maxY = Math.max(...Object.values(themeCategories), 0);
+  const maxY = Math.max(...Object.values(themeCategories).map(v => Number(v)), 0);
   const yAxisDomain = [0, maxY + 4];
 
   return (
@@ -276,10 +281,12 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
               type="number" 
               dataKey="y"
               domain={yAxisDomain}
-              ticks={[0, ...Object.values(themeCategories)]}
+              ticks={[0, ...Object.values(themeCategories).map(v => Number(v))]}
               tickFormatter={formatYAxisLabel}
               tick={{ fontSize: 12 }}
               width={50}
+              tickCount={Object.keys(themeCategories).length + 1}
+              label={{ value: '主题类别', angle: -90, position: 'insideLeft' }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Scatter 

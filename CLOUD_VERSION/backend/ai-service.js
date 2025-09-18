@@ -184,6 +184,18 @@ class AIService {
     }
   }
 
+  // 健身数据AI分析
+  async generateFitnessSummary(fitnessDescription) {
+    try {
+      const prompt = this.generateFitnessAnalysisPrompt(fitnessDescription);
+      const response = await this.callBestLLM(prompt);
+      return this.parseFitnessAnalysis(response);
+    } catch (error) {
+      console.error('健身数据AI分析失败:', error);
+      return this.getFallbackFitnessAnalysis(fitnessDescription);
+    }
+  }
+
   // 生成健身分析提示词
   generateFitnessAnalysisPrompt(fitnessDescription) {
     return `你是一个健身专家。请分析健身描述并返回标准JSON格式：
@@ -824,5 +836,31 @@ ${recentRecords.map((record, index) =>
     };
   }
 }
+
+// 导出单个函数供API使用
+export const analyzeMoodData = (moodDescription) => {
+  const aiService = new AIService();
+  return aiService.analyzeMoodData(moodDescription);
+};
+
+export const analyzeStudyData = (studyDescription) => {
+  const aiService = new AIService();
+  return aiService.analyzeStudyData(studyDescription);
+};
+
+export const analyzeWorkData = (workDescription) => {
+  const aiService = new AIService();
+  return aiService.analyzeWorkData(workDescription);
+};
+
+export const analyzeInspirationData = (inspirationDescription) => {
+  const aiService = new AIService();
+  return aiService.analyzeInspirationData(inspirationDescription);
+};
+
+export const generateFitnessSummary = (fitnessText) => {
+  const aiService = new AIService();
+  return aiService.generateFitnessSummary(fitnessText);
+};
 
 export default AIService; 

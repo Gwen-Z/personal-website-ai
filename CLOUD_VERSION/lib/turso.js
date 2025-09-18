@@ -64,8 +64,14 @@ export async function initializeTables() {
     // 创建 raw_entries 表（包含页面/接口使用到的列）
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS raw_entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         date TEXT NOT NULL,
+        description TEXT,
+        category TEXT,
+        duration TEXT,
+        intensity TEXT,
+        mood TEXT,
+        notes TEXT,
         mood_text TEXT,
         fitness_text TEXT,
         study_text TEXT,
@@ -73,6 +79,7 @@ export async function initializeTables() {
         inspiration_text TEXT,
         raw_text TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         processed_at DATETIME,
         source TEXT DEFAULT 'shortcut'
       )
@@ -87,6 +94,12 @@ export async function initializeTables() {
           try { await turso.execute(`ALTER TABLE raw_entries ADD COLUMN ${col} ${type}`); } catch (e) { /* ignore */ }
         }
       };
+      await ensureColumn('description', 'TEXT');
+      await ensureColumn('category', 'TEXT');
+      await ensureColumn('duration', 'TEXT');
+      await ensureColumn('intensity', 'TEXT');
+      await ensureColumn('mood', 'TEXT');
+      await ensureColumn('notes', 'TEXT');
       await ensureColumn('mood_text', 'TEXT');
       await ensureColumn('fitness_text', 'TEXT');
       await ensureColumn('study_text', 'TEXT');
@@ -94,6 +107,7 @@ export async function initializeTables() {
       await ensureColumn('inspiration_text', 'TEXT');
       await ensureColumn('raw_text', 'TEXT');
       await ensureColumn('created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+      await ensureColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
       await ensureColumn('processed_at', 'DATETIME');
       await ensureColumn('source', "TEXT DEFAULT 'shortcut'");
     } catch (e) {
@@ -124,6 +138,7 @@ export async function initializeTables() {
 export async function query(sql, params = []) {
   try {
     const turso = getTursoClient();
+    console.log('🔍 执行SQL查询:', sql, '参数:', params);
     const result = await turso.execute({
       sql,
       args: params
@@ -131,6 +146,8 @@ export async function query(sql, params = []) {
     return result;
   } catch (error) {
     console.error('数据库查询失败:', error);
+    console.error('失败的SQL:', sql);
+    console.error('参数:', params);
     throw error;
   }
 }
@@ -159,7 +176,16 @@ export async function insert(table, data) {
 // 查询所有记录
 export async function selectAll(table, whereClause = '', params = []) {
   try {
-    const sql = `SELECT * FROM ${table} ${whereClause} ORDER BY date DESC`;
+    // 根据表名选择合适的排序列
+    let orderBy = '';
+    if (table === 'notebooks') {
+      orderBy = 'ORDER BY created_at DESC';
+    } else if (table === 'notes') {
+      orderBy = 'ORDER BY created_at DESC';
+    } else {
+      orderBy = 'ORDER BY date DESC';
+    }
+    const sql = `SELECT * FROM ${table} ${whereClause} ${orderBy}`;
     const result = await query(sql, params);
     if (result && result.columns && result.rows) {
       const columns = result.columns;
@@ -175,6 +201,26 @@ export async function selectAll(table, whereClause = '', params = []) {
     return [];
   } catch (error) {
     console.error(`查询 ${table} 失败:`, error);
+    throw error;
+  }
+}
+
+// 更新数据
+export async function update(table, data, whereClause, params = []) {
+  try {
+    const turso = getTursoClient();
+    const setClause = Object.keys(data).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(data), ...params];
+    
+    const sql = `UPDATE ${table} SET ${setClause} ${whereClause}`;
+    const result = await turso.execute({
+      sql,
+      args: values
+    });
+    
+    return result;
+  } catch (error) {
+    console.error(`更新 ${table} 失败:`, error);
     throw error;
   }
 }

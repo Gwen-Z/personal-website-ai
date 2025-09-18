@@ -1,25 +1,38 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import apiClient from '../apiClient'
 
 type SimpleRecordItem = {
   id: number
   date: string
   mood_description?: string
-  fitness_calories?: string
-  fitness_duration?: string
+  mood_score?: number
+  mood_category?: string
+  fitness_description?: string
+  fitness_calories?: number
+  fitness_duration?: number
   fitness_type?: string
+  study_description?: string
+  study_duration?: number
+  study_subject?: string
+  work_description?: string
+  work_task_type?: string
+  work_priority?: string
+  work_complexity?: string
+  work_estimated_hours?: number
+  inspiration_description?: string
+  inspiration_category?: string
+  inspiration_difficulty?: string
+  life_description?: string
+  created_at?: string
+}
+
+type SimpleRecordEdit = {
+  date?: string
+  mood_description?: string
+  fitness_description?: string
   study_description?: string
   work_description?: string
   inspiration_description?: string
-}
-
-type RawEdit = {
-  date?: string
-  mood_text?: string
-  fitness_text?: string
-  study_text?: string
-  work_text?: string
-  inspiration_text?: string
 }
 
 
@@ -41,26 +54,28 @@ export default function AIDataPage() {
   const [adding, setAdding] = useState(false)
 
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editing, setEditing] = useState<Partial<RawEdit>>({})
+  const [editing, setEditing] = useState<Partial<SimpleRecordEdit>>({})
   const [savingId, setSavingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const params: any = {}
       if (from) params.from = from
       if (to) params.to = to
       const { data } = await apiClient.get(`/api/simple-records`, { params })
-      setItems(Array.isArray(data.records) ? data.records : [])
+      // API返回格式: {records: [...], stats: {...}}
+      const records = data?.records || []
+      setItems(Array.isArray(records) ? records : [])
     } finally {
       setLoading(false)
     }
-  }
+  }, [from, to])
 
   useEffect(() => { 
     load() 
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load])
 
   // 窗口聚焦自动刷新
   useEffect(() => {
@@ -80,10 +95,12 @@ export default function AIDataPage() {
     const k = keyword.trim().toLowerCase();
     return items.filter(i =>
       (i.mood_description || '').toLowerCase().includes(k) ||
-      ((i.fitness_calories || '') + (i.fitness_duration || '') + (i.fitness_type || '')).toLowerCase().includes(k) ||
+      (i.life_description || '').toLowerCase().includes(k) ||
+      (i.fitness_description || '').toLowerCase().includes(k) ||
       (i.study_description || '').toLowerCase().includes(k) ||
       (i.work_description || '').toLowerCase().includes(k) ||
       (i.inspiration_description || '').toLowerCase().includes(k) ||
+      (i.mood_category || '').toLowerCase().includes(k) ||
       i.date.toLowerCase().includes(k)
     );
   }, [items, keyword]);
@@ -104,22 +121,22 @@ export default function AIDataPage() {
     const lines = newEntry.description.split('\n');
     const data = {
       date: newEntry.date,
-      mood_text: lines.find(l => l.startsWith('心情:'))?.replace('心情:', '').trim() || '',
-      life_text: lines.find(l => l.startsWith('健身:'))?.replace('健身:', '').trim() || '',
-      study_text: lines.find(l => l.startsWith('学习:'))?.replace('学习:', '').trim() || '',
-      work_text: lines.find(l => l.startsWith('工作:'))?.replace('工作:', '').trim() || '',
-      inspiration_text: lines.find(l => l.startsWith('灵感:'))?.replace('灵感:', '').trim() || '',
+      mood_description: lines.find(l => l.startsWith('心情:'))?.replace('心情:', '').trim() || '',
+      fitness_description: lines.find(l => l.startsWith('健身:'))?.replace('健身:', '').trim() || '',
+      study_description: lines.find(l => l.startsWith('学习:'))?.replace('学习:', '').trim() || '',
+      work_description: lines.find(l => l.startsWith('工作:'))?.replace('工作:', '').trim() || '',
+      inspiration_description: lines.find(l => l.startsWith('灵感:'))?.replace('灵感:', '').trim() || '',
     };
     
     // 验证至少有一个字段有内容
-    if (!data.mood_text && !data.life_text && !data.study_text && !data.work_text && !data.inspiration_text) {
+    if (!data.mood_description && !data.fitness_description && !data.study_description && !data.work_description && !data.inspiration_description) {
       alert('请至少输入一个维度的内容（心情、健身、学习、工作或灵感）')
       return
     }
     
     setAdding(true)
     try {
-      await apiClient.post('/api/raw-entry', data)
+      await apiClient.post('/api/raw-entries', data)
       setNewEntry({
         date: new Date().toISOString().slice(0, 10),
         description: ''
@@ -139,17 +156,17 @@ export default function AIDataPage() {
   }
 
   async function saveEdit(id: number) {
-    const body: RawEdit = {
+    const body: SimpleRecordEdit = {
       date: editing.date,
-      mood_text: editing.mood_text || '',
-      fitness_text: editing.fitness_text || '',
-      study_text: editing.study_text || '',
-      work_text: editing.work_text || '',
-      inspiration_text: editing.inspiration_text || '',
+      mood_description: editing.mood_description || '',
+      fitness_description: editing.fitness_description || '',
+      study_description: editing.study_description || '',
+      work_description: editing.work_description || '',
+      inspiration_description: editing.inspiration_description || '',
     }
     setSavingId(id)
     try {
-      await apiClient.put(`/api/raw-entries/${id}`, body)
+      await apiClient.put(`/api/simple-records/${id}`, body)
       setEditingId(null)
       setEditing({})
       await load()
@@ -168,7 +185,7 @@ export default function AIDataPage() {
     setDeletingId(id)
     setItems(optimistic)
     try {
-      await apiClient.delete(`/api/raw-entries/${id}`)
+      await apiClient.delete(`/api/simple-records/${id}`)
       if (editingId === id) {
         setEditingId(null)
         setEditing({})
@@ -186,7 +203,7 @@ export default function AIDataPage() {
     <div className="space-y-4">
       {/* 新增数据表单 - 放在最前面 */}
       <div className="rounded-2xl border bg-white p-4">
-        <div className="font-medium mb-3">📝 新增原始数据</div>
+        <div className="font-medium mb-3">📝 新增AI分析数据</div>
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
@@ -215,14 +232,14 @@ export default function AIDataPage() {
           </div>
           <div className="flex items-center gap-3">
             <button 
-              className="h-9 rounded-xl bg-indigo-600 text-white px-4 text-sm hover:bg-indigo-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed" 
+              className="h-8 rounded-xl bg-indigo-600 text-white px-3 text-xs hover:bg-indigo-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed" 
               onClick={addEntry}
               disabled={adding || !newEntry.description.trim()}
             >
               {adding ? '添加中...' : '添加数据'}
             </button>
             <button 
-              className="h-9 rounded-xl border border-slate-300 text-slate-600 px-4 text-sm hover:bg-slate-50 transition-colors" 
+              className="h-8 rounded-xl border border-slate-300 text-slate-600 px-3 text-xs hover:bg-slate-50 transition-colors" 
               onClick={() => setNewEntry({date: new Date().toISOString().slice(0, 10), description: ''})}
               disabled={adding}
             >
@@ -253,7 +270,7 @@ export default function AIDataPage() {
 
       <div className="rounded-2xl border bg-white">
         <div className="px-4 py-3 border-b flex items-center justify-between">
-          <div className="font-medium">原始数据列表</div>
+          <div className="font-medium">AI分析结果列表</div>
           <div className="text-sm text-slate-500">{loading ? '加载中...' : `共 ${filteredItems.length} 条`}</div>
         </div>
         <div className="overflow-x-auto">
@@ -281,18 +298,9 @@ export default function AIDataPage() {
                     <span className="truncate inline-block max-w-full" title={item.mood_description}>{item.mood_description || '—'}</span>
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    {(() => {
-                      const parts: string[] = [];
-                      if (item.fitness_type) parts.push(item.fitness_type);
-                      if (item.fitness_duration) parts.push(item.fitness_duration);
-                      if (item.fitness_calories) parts.push(item.fitness_calories);
-                      const fitnessText = parts.join(' ');
-                      return (
-                        <span className="truncate inline-block max-w-full" title={fitnessText}>
-                          {fitnessText || '—'}
-                        </span>
-                      );
-                    })()}
+                    <span className="truncate inline-block max-w-full" title={item.fitness_description || item.life_description}>
+                      {item.fitness_description || item.life_description || '—'}
+                    </span>
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
                     <span className="truncate inline-block max-w-full" title={item.study_description}>{item.study_description || '—'}</span>

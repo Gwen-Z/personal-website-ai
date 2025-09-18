@@ -5,9 +5,15 @@ import AIService from './ai-service.js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// 加载环境变量
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 加载环境变量，优先加载 .env.local
+dotenv.config({ path: path.join(__dirname, '../.env.local') });
+dotenv.config(); // 如果 .env.local 不存在，则加载默认的 .env
 
 const app = express();
 app.use(cors());
@@ -1687,9 +1693,468 @@ function parseRawTextData(rawText) {
   return result;
 }
 
+// 笔记本相关API
+app.get('/api/notebooks', async (req, res) => {
+  try {
+    const notebooks = await db.all('SELECT * FROM notebooks ORDER BY created_at DESC');
+    res.json({ 
+      success: true, 
+      notebooks: notebooks.map(notebook => ({
+        id: notebook.id,
+        name: notebook.name,
+        note_count: notebook.note_count || 0,
+        created_at: notebook.created_at,
+        updated_at: notebook.updated_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching notebooks:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch notebooks' });
+  }
+});
+
+// 创建笔记本
+app.post('/api/notebooks', async (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Notebook name is required' });
+    }
+
+    // 生成Turso格式的ID
+    const generateTursoId = () => {
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substr(2, 5);
+      return `A${timestamp}${random}`.toUpperCase();
+    };
+
+    const id = generateTursoId();
+    
+    await db.run(
+      'INSERT INTO notebooks (id, name, note_count) VALUES (?, ?, ?)',
+      [id, name, 0]
+    );
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Notebook created successfully',
+      notebook: {
+        id,
+        name,
+        note_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error creating notebook:', error);
+    res.status(500).json({ success: false, message: 'Failed to create notebook' });
+  }
+});
+
+app.get('/api/notes', async (req, res) => {
+  try {
+    const { notebook_id, id } = req.query;
+    
+    // 如果提供了id参数，返回单条笔记
+    if (id) {
+      const note = await db.get('SELECT * FROM notes WHERE note_id = ?', [id]);
+      if (!note) {
+        return res.status(404).json({ success: false, message: 'Note not found' });
+      }
+      
+      // 获取笔记本信息
+      const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [note.notebook_id]);
+      
+      return res.json({
+        success: true,
+        note: {
+          id: note.id,
+          notebook_id: note.notebook_id,
+          title: note.title,
+          image_url: note.image_url,
+          duration_minutes: note.duration_minutes,
+          created_at: note.created_at,
+          status: note.status || 'success'
+        },
+        notebook: notebook ? {
+          id: notebook.id,
+          name: notebook.name,
+          note_count: notebook.note_count || 0,
+          created_at: notebook.created_at,
+          updated_at: notebook.updated_at
+        } : null
+      });
+    }
+    
+    // 如果没有提供id，则按原来的逻辑处理notebook_id
+    if (!notebook_id) {
+      return res.status(400).json({ success: false, message: 'notebook_id or id is required' });
+    }
+
+    console.log('📝 获取笔记请求:', { notebook_id });
+
+    // 获取笔记本信息
+    const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [notebook_id]);
+    if (!notebook) {
+      return res.status(404).json({ success: false, message: 'Notebook not found' });
+    }
+
+    console.log('📚 找到笔记本:', notebook.name);
+
+    // 先检查笔记数量，避免查询过多数据
+    let noteCount = 0;
+    let notes = [];
+    
+    try {
+      console.log('📝 查询笔记数量...');
+      const countResult = await Promise.race([
+        db.get('SELECT COUNT(*) as count FROM notes WHERE notebook_id = ?', [notebook_id]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Count query timeout')), 5000))
+      ]);
+      noteCount = countResult.count || 0;
+      console.log('📝 笔记数量:', noteCount);
+
+      if (noteCount > 0 && noteCount < 1000) {
+        // 如果笔记数量合理，查询具体笔记
+        console.log('📝 查询笔记详情...');
+        notes = await Promise.race([
+          db.all('SELECT * FROM notes WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 50', [notebook_id]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Notes query timeout')), 10000))
+        ]);
+        console.log('✅ 成功查询到笔记:', notes.length);
+      } else if (noteCount >= 1000) {
+        console.log('⚠️ 笔记数量过多，跳过查询以避免超时');
+      }
+    } catch (error) {
+      console.error('❌ 查询笔记时出错:', error.message);
+      // 即使查询失败，也返回空结果而不是完全失败
+      noteCount = 0;
+      notes = [];
+    }
+    
+    res.json({ 
+      success: true, 
+      notebook: {
+        id: notebook.id,
+        name: notebook.name,
+        note_count: noteCount,
+        created_at: notebook.created_at,
+        updated_at: notebook.updated_at
+      },
+      notes: notes.map(note => ({
+        id: note.id,
+        note_id: note.note_id || note.id,
+        notebook_id: note.notebook_id,
+        title: note.title,
+        content_text: note.content_text || note.content || '',
+        image_url: note.image_url,
+        images: note.images ? (typeof note.images === 'string' ? JSON.parse(note.images) : note.images) : [],
+        image_urls: note.image_urls,
+        source_url: note.source_url || '',
+        original_url: note.original_url || '',
+        author: note.author || '',
+        upload_time: note.upload_time || '',
+        duration_minutes: note.duration_minutes,
+        created_at: note.created_at,
+        updated_at: note.updated_at,
+        status: note.status || 'success'
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch notes', error: error.message });
+  }
+});
+
+// 重命名笔记本
+app.post('/api/notebook-rename', async (req, res) => {
+  try {
+    const { id, name } = req.body;
+    
+    if (!id || !name) {
+      return res.status(400).json({ success: false, message: 'Notebook id and name are required' });
+    }
+
+    await db.run('UPDATE notebooks SET name = ?, updated_at = ? WHERE id = ?', [name, new Date().toISOString(), id]);
+
+    res.json({ 
+      success: true, 
+      message: 'Notebook renamed successfully'
+    });
+  } catch (error) {
+    console.error('Error renaming notebook:', error);
+    res.status(500).json({ success: false, message: 'Failed to rename notebook' });
+  }
+});
+
+// 删除笔记本
+app.post('/api/notebook-delete', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Notebook id is required' });
+    }
+
+    // 先删除笔记本下的所有笔记
+    await db.run('DELETE FROM notes WHERE notebook_id = ?', [id]);
+    
+    // 再删除笔记本
+    await db.run('DELETE FROM notebooks WHERE id = ?', [id]);
+
+    res.json({ 
+      success: true, 
+      message: 'Notebook and all its notes deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting notebook:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete notebook' });
+  }
+});
+
+// 创建笔记
+app.post('/api/notes', async (req, res) => {
+  try {
+    const { 
+      notebook_id, 
+      title, 
+      content_text, 
+      images, 
+      source_url, 
+      original_url, 
+      author, 
+      upload_time 
+    } = req.body;
+    
+    if (!notebook_id || !title) {
+      return res.status(400).json({ success: false, message: 'Notebook id and title are required' });
+    }
+
+    // 生成Turso格式的ID
+    const generateTursoId = () => {
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substr(2, 5);
+      return `N${timestamp}${random}`.toUpperCase();
+    };
+
+    const noteId = generateTursoId();
+    
+    await db.run(
+      'INSERT INTO notes (id, note_id, notebook_id, title, content_text, images, source_url, original_url, author, upload_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        noteId, 
+        noteId, 
+        notebook_id, 
+        title, 
+        content_text || '', 
+        images ? JSON.stringify(images) : null,
+        source_url || null,
+        original_url || null,
+        author || null,
+        upload_time || null,
+        new Date().toISOString(), 
+        new Date().toISOString()
+      ]
+    );
+
+    // 更新笔记本的笔记数量
+    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), notebook_id]);
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Note created successfully',
+      note: {
+        id: noteId,
+        note_id: noteId,
+        notebook_id,
+        title,
+        content_text: content_text || '',
+        images: images || [],
+        source_url: source_url || '',
+        original_url: original_url || '',
+        author: author || '',
+        upload_time: upload_time || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error creating note:', error);
+    res.status(500).json({ success: false, message: 'Failed to create note' });
+  }
+});
+
+// 重命名笔记
+app.post('/api/note-rename', async (req, res) => {
+  try {
+    const { id, title } = req.body;
+    
+    if (!id || !title) {
+      return res.status(400).json({ success: false, message: 'Note id and title are required' });
+    }
+
+    await db.run('UPDATE notes SET title = ?, updated_at = ? WHERE id = ?', [title, new Date().toISOString(), id]);
+
+    res.json({ 
+      success: true, 
+      message: 'Note renamed successfully'
+    });
+  } catch (error) {
+    console.error('Error renaming note:', error);
+    res.status(500).json({ success: false, message: 'Failed to rename note' });
+  }
+});
+
+// 移动笔记
+app.post('/api/note-move', async (req, res) => {
+  try {
+    const { note_id, target_notebook_id } = req.body;
+    
+    if (!note_id || !target_notebook_id) {
+      return res.status(400).json({ success: false, message: 'Note id and target notebook id are required' });
+    }
+
+    // 获取笔记的当前笔记本ID
+    const note = await db.get('SELECT notebook_id FROM notes WHERE id = ?', [note_id]);
+    if (!note) {
+      return res.status(404).json({ success: false, message: 'Note not found' });
+    }
+
+    const oldNotebookId = note.notebook_id;
+
+    // 移动笔记
+    await db.run('UPDATE notes SET notebook_id = ?, updated_at = ? WHERE id = ?', [target_notebook_id, new Date().toISOString(), note_id]);
+
+    // 更新原笔记本的笔记数量
+    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), oldNotebookId]);
+
+    // 更新目标笔记本的笔记数量
+    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), target_notebook_id]);
+
+    res.json({ 
+      success: true, 
+      message: 'Note moved successfully'
+    });
+  } catch (error) {
+    console.error('Error moving note:', error);
+    res.status(500).json({ success: false, message: 'Failed to move note' });
+  }
+});
+
+// 删除笔记
+app.post('/api/note-delete', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Note id is required' });
+    }
+
+    // 获取笔记的笔记本ID
+    const note = await db.get('SELECT notebook_id FROM notes WHERE id = ?', [id]);
+    if (!note) {
+      return res.status(404).json({ success: false, message: 'Note not found' });
+    }
+
+    // 删除笔记
+    await db.run('DELETE FROM notes WHERE id = ?', [id]);
+
+    // 更新笔记本的笔记数量
+    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), note.notebook_id]);
+
+    res.json({ 
+      success: true, 
+      message: 'Note deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete note' });
+  }
+});
+
+// 获取笔记详情数据
+app.get('/api/note-detail-data', async (req, res) => {
+  try {
+    console.log('🔍 note-detail-data endpoint called with id:', req.query.id);
+    const { id } = req.query;
+    
+    if (!id) {
+      console.log('❌ Missing id parameter');
+      return res.status(400).json({ error: 'Missing id parameter' });
+    }
+
+    // 获取笔记详情
+    console.log('📝 Querying note with id:', id);
+    const note = await db.get('SELECT * FROM notes WHERE note_id = ?', [id]);
+    console.log('📝 Note query result:', note ? 'found' : 'not found');
+    
+    if (!note) {
+      console.log('❌ Note not found');
+      return res.status(404).json({ error: 'Note not found' });
+    }
+
+    // 获取笔记本信息
+    console.log('📚 Querying notebook with id:', note.notebook_id);
+    const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [note.notebook_id]);
+    console.log('📚 Notebook query result:', notebook ? 'found' : 'not found');
+
+    // 处理笔记数据
+    let parsedImages = [];
+    if (note.images) {
+      try {
+        // 尝试解析JSON格式的images
+        if (typeof note.images === 'string') {
+          parsedImages = JSON.parse(note.images);
+        } else if (Array.isArray(note.images)) {
+          parsedImages = note.images;
+        }
+      } catch (e) {
+        console.error('解析图片数据失败:', e);
+        parsedImages = [];
+      }
+    }
+
+    const enrichedNote = {
+      ...note,
+      content_text: note.content_text || note.content || '',
+      images: parsedImages,
+      image_urls: note.image_urls || null,
+      source_url: note.source_url || '',
+      core_points: note.core_points || '',
+      keywords: note.keywords || '',
+      knowledge_extension: note.knowledge_extension || '',
+      learning_path: note.learning_path || '',
+      ai_chat_summary: note.ai_chat_summary || ''
+    };
+
+    console.log(`✅ 成功获取笔记详情: ${enrichedNote.title}`);
+    
+    res.json({
+      success: true,
+      note: enrichedNote,
+      notebook: notebook
+    });
+
+  } catch (error) {
+    console.error('获取笔记详情失败:', error);
+    res.status(500).json({ error: '获取笔记详情失败', details: error.message });
+  }
+});
+
 // 健康检查接口
 app.get('/health', (req, res) => {
   res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    ai_service: !!(aiService.openaiApiKey || aiService.anthropicApiKey)
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    success: true,
     status: 'OK', 
     timestamp: new Date().toISOString(),
     ai_service: !!(aiService.openaiApiKey || aiService.anthropicApiKey)
