@@ -20,7 +20,7 @@ export default function NewNotebookModal({ isOpen, onClose }: Props) {
       const { data } = await apiClient.post('/api/notebooks', { name: trimmed });
       if (data && data.success) {
         // 通知全局刷新并打开新笔记本
-        const event = new CustomEvent('notebook:created', { detail: { id: data.notebook?.id } });
+        const event = new CustomEvent('notebook:created', { detail: { id: data.notebook?.notebook_id } });
         window.dispatchEvent(event);
         onClose();
         setTimeout(() => setName(''), 0);

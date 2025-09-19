@@ -22,6 +22,11 @@ app.use(express.json());
 let db;
 const aiService = new AIService();
 
+// 确保使用Turso数据库
+console.log('🔧 强制使用Turso数据库');
+process.env.TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || 'libsql://personal-website-data-gwen-z.aws-ap-northeast-1.turso.io';
+process.env.TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NTc2NTY4MzgsImlkIjoiODNlYTk1MTgtOWQwNC00MjAzLWJkNTEtMzlhMWNlNDI5NGEzIiwicmlkIjoiMGY3MWIzNDQtOTkzZC00MWE0LTlmMGYtOGEwYTQ0OWI2YTQ3In0.X5YU1QY27JEAIll0Ivj1VRSh7pupCv4vaEmRJ32DWwHr3_jG8vI7MdM9m7M2hrYS06SXkOYMYe-VMg4i1CHgDw';
+
 // 添加记录（支持可选的 mood_emoji、mood_description）
 app.post('/api/record', async (req, res) => {
   try {
@@ -1298,7 +1303,7 @@ app.get('/api/raw-entries/:id', async (req, res) => {
 // 编辑原始数据
 app.put('/api/raw-entries/:id', async (req, res) => {
   try {
-    const { date, mood_text, life_text, study_text, work_text, inspiration_text } = req.body;
+    const { date, mood_text, fitness_text, study_text, work_text, inspiration_text } = req.body;
     
     if (!date) {
       return res.status(400).json({ message: 'Date is required' });
@@ -1306,8 +1311,8 @@ app.put('/api/raw-entries/:id', async (req, res) => {
 
     // 更新原始数据
     const result = await db.run(
-      'UPDATE raw_entries SET date = ?, mood_text = ?, life_text = ?, study_text = ?, work_text = ?, inspiration_text = ? WHERE id = ?',
-      [date, mood_text || '', life_text || '', study_text || '', work_text || '', inspiration_text || '', req.params.id]
+      'UPDATE raw_entries SET date = ?, mood_text = ?, fitness_text = ?, study_text = ?, work_text = ?, inspiration_text = ? WHERE id = ?',
+      [date, mood_text || '', fitness_text || '', study_text || '', work_text || '', inspiration_text || '', req.params.id]
     );
 
     if (result.changes === 0) {
@@ -1321,7 +1326,7 @@ app.put('/api/raw-entries/:id', async (req, res) => {
         const processedData = await processRawDataWithAI({
           date,
           mood_text,
-          life_text,
+          fitness_text,
           study_text,
           work_text,
           inspiration_text
@@ -1697,10 +1702,37 @@ function parseRawTextData(rawText) {
 app.get('/api/notebooks', async (req, res) => {
   try {
     const notebooks = await db.all('SELECT * FROM notebooks ORDER BY created_at DESC');
+    
+    // 获取每个笔记本的笔记数量
+    const notebooksWithCount = [];
+    for (let notebook of notebooks) {
+      try {
+        console.log(`🔍 查询笔记本 ${notebook.notebook_id} 的笔记数量...`);
+        const countResult = await db.all(
+          'SELECT COUNT(*) as count FROM notes WHERE notebook_id = ?',
+          [notebook.notebook_id]
+        );
+        console.log(`📊 笔记本 ${notebook.notebook_id} 的笔记数量查询结果:`, countResult);
+        const noteCount = countResult[0]?.count || 0;
+        console.log(`✅ 设置笔记本 ${notebook.notebook_id} 的笔记数量为: ${noteCount}`);
+        
+        notebooksWithCount.push({
+          ...notebook,
+          note_count: noteCount
+        });
+      } catch (error) {
+        console.error(`❌ 查询笔记本 ${notebook.notebook_id} 笔记数量时出错:`, error);
+        notebooksWithCount.push({
+          ...notebook,
+          note_count: 0
+        });
+      }
+    }
+    
     res.json({ 
       success: true, 
-      notebooks: notebooks.map(notebook => ({
-        id: notebook.id,
+      notebooks: notebooksWithCount.map(notebook => ({
+        notebook_id: notebook.notebook_id,
         name: notebook.name,
         note_count: notebook.note_count || 0,
         created_at: notebook.created_at,
@@ -1732,7 +1764,7 @@ app.post('/api/notebooks', async (req, res) => {
     const id = generateTursoId();
     
     await db.run(
-      'INSERT INTO notebooks (id, name, note_count) VALUES (?, ?, ?)',
+      'INSERT INTO notebooks (notebook_id, name, note_count) VALUES (?, ?, ?)',
       [id, name, 0]
     );
 
@@ -1740,7 +1772,7 @@ app.post('/api/notebooks', async (req, res) => {
       success: true, 
       message: 'Notebook created successfully',
       notebook: {
-        id,
+        notebook_id: id,
         name,
         note_count: 0,
         created_at: new Date().toISOString(),
@@ -1765,12 +1797,13 @@ app.get('/api/notes', async (req, res) => {
       }
       
       // 获取笔记本信息
-      const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [note.notebook_id]);
+      const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [note.notebook_id]);
       
       return res.json({
         success: true,
         note: {
-          id: note.id,
+          id: note.note_id,
+          note_id: note.note_id,
           notebook_id: note.notebook_id,
           title: note.title,
           image_url: note.image_url,
@@ -1779,7 +1812,7 @@ app.get('/api/notes', async (req, res) => {
           status: note.status || 'success'
         },
         notebook: notebook ? {
-          id: notebook.id,
+          notebook_id: notebook.notebook_id,
           name: notebook.name,
           note_count: notebook.note_count || 0,
           created_at: notebook.created_at,
@@ -1796,7 +1829,7 @@ app.get('/api/notes', async (req, res) => {
     console.log('📝 获取笔记请求:', { notebook_id });
 
     // 获取笔记本信息
-    const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [notebook_id]);
+    const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [notebook_id]);
     if (!notebook) {
       return res.status(404).json({ success: false, message: 'Notebook not found' });
     }
@@ -1820,8 +1853,8 @@ app.get('/api/notes', async (req, res) => {
         // 如果笔记数量合理，查询具体笔记
         console.log('📝 查询笔记详情...');
         notes = await Promise.race([
-          db.all('SELECT * FROM notes WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 50', [notebook_id]),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Notes query timeout')), 10000))
+          db.all('SELECT note_id, notebook_id, title, created_at FROM notes WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 50', [notebook_id]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Notes query timeout')), 30000))
         ]);
         console.log('✅ 成功查询到笔记:', notes.length);
       } else if (noteCount >= 1000) {
@@ -1837,15 +1870,15 @@ app.get('/api/notes', async (req, res) => {
     res.json({ 
       success: true, 
       notebook: {
-        id: notebook.id,
+        notebook_id: notebook.notebook_id,
         name: notebook.name,
         note_count: noteCount,
         created_at: notebook.created_at,
         updated_at: notebook.updated_at
       },
       notes: notes.map(note => ({
-        id: note.id,
-        note_id: note.note_id || note.id,
+        id: note.note_id,
+        note_id: note.note_id,
         notebook_id: note.notebook_id,
         title: note.title,
         content_text: note.content_text || note.content || '',
@@ -1859,7 +1892,7 @@ app.get('/api/notes', async (req, res) => {
         duration_minutes: note.duration_minutes,
         created_at: note.created_at,
         updated_at: note.updated_at,
-        status: note.status || 'success'
+        status: 'success'
       }))
     });
   } catch (error) {
@@ -1877,7 +1910,7 @@ app.post('/api/notebook-rename', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Notebook id and name are required' });
     }
 
-    await db.run('UPDATE notebooks SET name = ?, updated_at = ? WHERE id = ?', [name, new Date().toISOString(), id]);
+    await db.run('UPDATE notebooks SET name = ?, updated_at = ? WHERE notebook_id = ?', [name, new Date().toISOString(), id]);
 
     res.json({ 
       success: true, 
@@ -1902,7 +1935,7 @@ app.post('/api/notebook-delete', async (req, res) => {
     await db.run('DELETE FROM notes WHERE notebook_id = ?', [id]);
     
     // 再删除笔记本
-    await db.run('DELETE FROM notebooks WHERE id = ?', [id]);
+    await db.run('DELETE FROM notebooks WHERE notebook_id = ?', [id]);
 
     res.json({ 
       success: true, 
@@ -1942,9 +1975,8 @@ app.post('/api/notes', async (req, res) => {
     const noteId = generateTursoId();
     
     await db.run(
-      'INSERT INTO notes (id, note_id, notebook_id, title, content_text, images, source_url, original_url, author, upload_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO notes (note_id, notebook_id, title, content_text, images, source_url, original_url, author, upload_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        noteId, 
         noteId, 
         notebook_id, 
         title, 
@@ -1960,7 +1992,7 @@ app.post('/api/notes', async (req, res) => {
     );
 
     // 更新笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), notebook_id]);
+    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), notebook_id]);
 
     res.status(201).json({ 
       success: true, 
@@ -1995,7 +2027,7 @@ app.post('/api/note-rename', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Note id and title are required' });
     }
 
-    await db.run('UPDATE notes SET title = ?, updated_at = ? WHERE id = ?', [title, new Date().toISOString(), id]);
+    await db.run('UPDATE notes SET title = ?, updated_at = ? WHERE note_id = ?', [title, new Date().toISOString(), id]);
 
     res.json({ 
       success: true, 
@@ -2017,7 +2049,7 @@ app.post('/api/note-move', async (req, res) => {
     }
 
     // 获取笔记的当前笔记本ID
-    const note = await db.get('SELECT notebook_id FROM notes WHERE id = ?', [note_id]);
+    const note = await db.get('SELECT notebook_id FROM notes WHERE note_id = ?', [note_id]);
     if (!note) {
       return res.status(404).json({ success: false, message: 'Note not found' });
     }
@@ -2025,13 +2057,13 @@ app.post('/api/note-move', async (req, res) => {
     const oldNotebookId = note.notebook_id;
 
     // 移动笔记
-    await db.run('UPDATE notes SET notebook_id = ?, updated_at = ? WHERE id = ?', [target_notebook_id, new Date().toISOString(), note_id]);
+    await db.run('UPDATE notes SET notebook_id = ?, updated_at = ? WHERE note_id = ?', [target_notebook_id, new Date().toISOString(), note_id]);
 
     // 更新原笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), oldNotebookId]);
+    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), oldNotebookId]);
 
     // 更新目标笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), target_notebook_id]);
+    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), target_notebook_id]);
 
     res.json({ 
       success: true, 
@@ -2053,16 +2085,16 @@ app.post('/api/note-delete', async (req, res) => {
     }
 
     // 获取笔记的笔记本ID
-    const note = await db.get('SELECT notebook_id FROM notes WHERE id = ?', [id]);
+    const note = await db.get('SELECT notebook_id FROM notes WHERE note_id = ?', [id]);
     if (!note) {
       return res.status(404).json({ success: false, message: 'Note not found' });
     }
 
     // 删除笔记
-    await db.run('DELETE FROM notes WHERE id = ?', [id]);
+    await db.run('DELETE FROM notes WHERE note_id = ?', [id]);
 
     // 更新笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), note.notebook_id]);
+    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), note.notebook_id]);
 
     res.json({ 
       success: true, 
@@ -2097,7 +2129,7 @@ app.get('/api/note-detail-data', async (req, res) => {
 
     // 获取笔记本信息
     console.log('📚 Querying notebook with id:', note.notebook_id);
-    const notebook = await db.get('SELECT * FROM notebooks WHERE id = ?', [note.notebook_id]);
+    const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [note.notebook_id]);
     console.log('📚 Notebook query result:', notebook ? 'found' : 'not found');
 
     // 处理笔记数据

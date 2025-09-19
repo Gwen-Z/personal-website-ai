@@ -295,21 +295,71 @@ export default function AIDataPage() {
                     ) : item.date}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.mood_description}>{item.mood_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={editing.mood_description || ''} 
+                        onChange={e=>setEditing(prev=>({...prev, mood_description: e.target.value}))} 
+                        className="h-8 w-full rounded border px-2" 
+                        placeholder="心情描述"
+                      />
+                    ) : (
+                      <span className="truncate inline-block max-w-full" title={item.mood_description}>{item.mood_description || '—'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.fitness_description || item.life_description}>
-                      {item.fitness_description || item.life_description || '—'}
-                    </span>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={editing.fitness_description || ''} 
+                        onChange={e=>setEditing(prev=>({...prev, fitness_description: e.target.value}))} 
+                        className="h-8 w-full rounded border px-2" 
+                        placeholder="健身描述"
+                      />
+                    ) : (
+                      <span className="truncate inline-block max-w-full" title={item.fitness_description || item.life_description}>
+                        {item.fitness_description || item.life_description || '—'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.study_description}>{item.study_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={editing.study_description || ''} 
+                        onChange={e=>setEditing(prev=>({...prev, study_description: e.target.value}))} 
+                        className="h-8 w-full rounded border px-2" 
+                        placeholder="学习描述"
+                      />
+                    ) : (
+                      <span className="truncate inline-block max-w-full" title={item.study_description}>{item.study_description || '—'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.work_description}>{item.work_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={editing.work_description || ''} 
+                        onChange={e=>setEditing(prev=>({...prev, work_description: e.target.value}))} 
+                        className="h-8 w-full rounded border px-2" 
+                        placeholder="工作描述"
+                      />
+                    ) : (
+                      <span className="truncate inline-block max-w-full" title={item.work_description}>{item.work_description || '—'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    <span className="truncate inline-block max-w-full" title={item.inspiration_description}>{item.inspiration_description || '—'}</span>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={editing.inspiration_description || ''} 
+                        onChange={e=>setEditing(prev=>({...prev, inspiration_description: e.target.value}))} 
+                        className="h-8 w-full rounded border px-2" 
+                        placeholder="灵感描述"
+                      />
+                    ) : (
+                      <span className="truncate inline-block max-w-full" title={item.inspiration_description}>{item.inspiration_description || '—'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     {editingId === item.id ? (

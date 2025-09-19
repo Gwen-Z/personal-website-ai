@@ -24,7 +24,7 @@ interface Note {
 }
 
 interface Notebook {
-  id: string;
+  notebook_id: string;
   name: string;
   created_at: string;
   updated_at: string;
@@ -241,7 +241,7 @@ const NoteDetailPage: React.FC = () => {
 
   const handleBack = () => {
     if (notebook) {
-      navigate(`/notes/${notebook.id}`);
+      navigate(`/notes/${notebook.notebook_id}`);
     } else {
       navigate('/');
     }

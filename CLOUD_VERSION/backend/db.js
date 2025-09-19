@@ -26,34 +26,82 @@ async function initDB() {
     const turso = createClient({
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
+      // 增加超时和重试配置
+      syncUrl: process.env.TURSO_DATABASE_URL,
+      syncInterval: 0, // 禁用自动同步
     });
-    await turso.execute('SELECT 1');
-    console.log('✅ Successfully connected to Turso.');
+    
+    // 添加重试机制
+    let retryCount = 0;
+    const maxRetries = 3;
+    while (retryCount < maxRetries) {
+      try {
+        await turso.execute('SELECT 1');
+        console.log('✅ Successfully connected to Turso.');
+        break;
+      } catch (error) {
+        retryCount++;
+        console.log(`❌ Turso connection attempt ${retryCount} failed:`, error.message);
+        if (retryCount >= maxRetries) {
+          throw new Error(`Failed to connect to Turso after ${maxRetries} attempts: ${error.message}`);
+        }
+        // 等待1秒后重试
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // 添加带重试的查询函数
+    const executeWithRetry = async (queryFn, maxRetries = 3) => {
+      let retryCount = 0;
+      while (retryCount < maxRetries) {
+        try {
+          return await queryFn();
+        } catch (error) {
+          retryCount++;
+          console.log(`❌ Database query attempt ${retryCount} failed:`, error.message);
+          if (retryCount >= maxRetries) {
+            throw error;
+          }
+          // 等待1秒后重试
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    };
 
     db = {
       async execute(argOrSql, maybeArgs) {
-        if (typeof argOrSql === 'string') {
-          return turso.execute({ sql: argOrSql, args: maybeArgs || [] });
-        }
-        return turso.execute(argOrSql);
+        return executeWithRetry(async () => {
+          if (typeof argOrSql === 'string') {
+            return turso.execute({ sql: argOrSql, args: maybeArgs || [] });
+          }
+          return turso.execute(argOrSql);
+        });
       },
       async run(sql, params = []) {
-        await turso.execute({ sql, args: params });
-        return { changes: 1 };
+        return executeWithRetry(async () => {
+          await turso.execute({ sql, args: params });
+          return { changes: 1 };
+        });
       },
       async all(sql, params = []) {
-        const res = await turso.execute({ sql, args: params });
-        return res.rows || [];
+        return executeWithRetry(async () => {
+          const res = await turso.execute({ sql, args: params });
+          return res.rows || [];
+        });
       },
       async get(sql, params = []) {
-        const rows = await this.all(sql, params);
-        return rows[0] || null;
+        return executeWithRetry(async () => {
+          const rows = await this.all(sql, params);
+          return rows[0] || null;
+        });
       },
       async exec(sql) {
-        const statements = String(sql).split(';').map(s => s.trim()).filter(Boolean);
-        for (const s of statements) {
-          await turso.execute(s);
-        }
+        return executeWithRetry(async () => {
+          const statements = String(sql).split(';').map(s => s.trim()).filter(Boolean);
+          for (const s of statements) {
+            await turso.execute(s);
+          }
+        });
       }
     };
 

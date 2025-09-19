@@ -450,9 +450,49 @@ export default function RawDataPage() {
                     ) : item.date}
                   </td>
                   <td className="px-3 py-2 max-w-[150px] text-xs">
-                    <div className="truncate cursor-help" title={item.mood_text || '无'}>
-                      {item.mood_text || '无'}
-                    </div>
+                    {editingId === item.id ? (
+                      <input 
+                        type="text" 
+                        value={
+                          category === 'mood' ? (editing.mood_text || '') :
+                          category === 'life' ? (editing.fitness_text || '') :
+                          category === 'study' ? (editing.study_text || '') :
+                          category === 'work' ? (editing.work_text || '') :
+                          category === 'inspiration' ? (editing.inspiration_text || '') :
+                          ''
+                        } 
+                        onChange={e => {
+                          const value = e.target.value;
+                          setEditing(prev => ({
+                            ...prev,
+                            ...(category === 'mood' ? { mood_text: value } :
+                                category === 'life' ? { fitness_text: value } :
+                                category === 'study' ? { study_text: value } :
+                                category === 'work' ? { work_text: value } :
+                                category === 'inspiration' ? { inspiration_text: value } :
+                                {})
+                          }));
+                        }}
+                        className="h-7 w-full rounded border px-2 text-xs" 
+                        placeholder={`输入${catDescLabel(category)}`}
+                      />
+                    ) : (
+                      <div className="truncate cursor-help" title={
+                        category === 'mood' ? (item.mood_text || '无') :
+                        category === 'life' ? (item.fitness_text || '无') :
+                        category === 'study' ? (item.study_text || '无') :
+                        category === 'work' ? (item.work_text || '无') :
+                        category === 'inspiration' ? (item.inspiration_text || '无') :
+                        '无'
+                      }>
+                        {category === 'mood' ? (item.mood_text || '无') :
+                         category === 'life' ? (item.fitness_text || '无') :
+                         category === 'study' ? (item.study_text || '无') :
+                         category === 'work' ? (item.work_text || '无') :
+                         category === 'inspiration' ? (item.inspiration_text || '无') :
+                         '无'}
+                      </div>
+                    )}
                   </td>
                   {category === 'mood' && (
                     <>

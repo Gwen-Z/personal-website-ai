@@ -45,12 +45,12 @@ const MoveNoteModal: React.FC<MoveNoteModalProps> = ({
           <p>选择目标笔记本：</p>
           <div className="notebook-list">
             {notebooks
-              .filter(notebook => notebook.id !== currentNotebookId)
+              .filter(notebook => notebook.notebook_id !== currentNotebookId)
               .map(notebook => (
                 <div
-                  key={notebook.id}
-                  className={`notebook-item ${selectedNotebookId === notebook.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedNotebookId(notebook.id)}
+                  key={notebook.notebook_id}
+                  className={`notebook-item ${selectedNotebookId === notebook.notebook_id ? 'selected' : ''}`}
+                  onClick={() => setSelectedNotebookId(notebook.notebook_id)}
                 >
                   <div className="notebook-name">{notebook.name}</div>
                   <div className="notebook-count">{notebook.note_count} 篇笔记</div>

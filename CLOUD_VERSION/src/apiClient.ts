@@ -2,7 +2,7 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 export interface Notebook {
-  id: string;
+  notebook_id: string;
   name: string;
   note_count: number;
   created_at: string;

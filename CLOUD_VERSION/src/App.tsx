@@ -16,7 +16,7 @@ type DataSubTab = 'raw' | 'ai';
 type ViewType = 'category' | 'data' | 'notes';
 
 interface Notebook {
-  id: string;
+  notebook_id: string;
   name: string;
   note_count: number;
 }
@@ -118,12 +118,10 @@ const MoodDot = (props: any) => {
 function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   const [data, setData] = React.useState<MoodPoint[]>([]);
   const getDefaultDateRange = () => {
-    const today = new Date();
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(today.getDate() - 7);
+    // 使用包含测试数据的日期范围
     return { 
-      from: oneWeekAgo.toISOString().slice(0, 10), 
-      to: today.toISOString().slice(0, 10) 
+      from: '2025-08-27', 
+      to: '2025-08-29' 
     };
   };
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange());
@@ -211,8 +209,8 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
           .map((r: any) => {
             const dateStr = (typeof r.date === 'string' && r.date.length >= 10) ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10);
             const rawScore = (r as any).mood_score;
-            // 只有当mood_score是有效数字且不为0时才使用，否则从文本解析
-            const score = (typeof rawScore === 'number' && !Number.isNaN(rawScore) && rawScore !== 0) ? rawScore : parseMoodToScore(r.mood_description || '');
+            // 如果mood_score是有效数字则使用，否则从文本解析
+            const score = (typeof rawScore === 'number' && !Number.isNaN(rawScore)) ? rawScore : parseMoodToScore(r.mood_description || '');
             const note = (r.mood_description || '');
             return { day: dateStr, score, event: note.length > 15 ? note.substring(0, 15) + '…' : note, emoji: r.mood_emoji };
           })
@@ -365,7 +363,11 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
     totalMinutes: 0
   })
 
-  function parseNumber(s?: string): number { if (!s) return 0; const m = String(s).match(/\d+/); return m ? Number(m[0]) : 0 }
+  function parseNumber(s?: string): number { 
+    if (!s) return 0; 
+    const m = String(s).match(/\d+/); 
+    return m ? Number(m[0]) : 0;
+  }
   const TYPE_COLORS: Record<string, string> = { '有氧运动': '#10b981', '力量训练': '#f59e0b', '柔韧性训练': '#06b6d4', '低强度有氧': '#8b5cf6' }
   function splitTypes(type?: string): string[] { if (!type) return []; return String(type).split(/[、/|,\s]+/).filter(Boolean) }
   const CustomLifeTooltip = ({ active, payload, label }: any) => {
@@ -553,8 +555,11 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   function parseNumber(s?: string): number { if (!s) return 0; const m = String(s).match(/\d+/); return m ? Number(m[0]) : 0 }
   function parseDuration(duration?: string): number {
     if (!duration || duration === '未提及') return 0.5 // 默认0.5小时
-    if (duration.includes('h')) return parseNumber(duration)
-    if (duration.includes('min')) return parseNumber(duration) / 60
+    if (duration.includes('h') || duration.includes('小时')) return parseNumber(duration)
+    if (duration.includes('min') || duration.includes('分钟')) return parseNumber(duration) / 60
+    // 如果只是数字，假设是分钟
+    const num = parseNumber(duration)
+    if (num > 0) return num / 60
     return 0.5 // 默认0.5小时
   }
 
@@ -1098,12 +1103,12 @@ const NotebookItem = ({
               e.stopPropagation();
               setShowMenu(false);
               if (window.confirm(`确定要删除笔记本"${notebook.name}"吗？这将同时删除该笔记本下的所有笔记，此操作不可恢复！`)) {
-                apiClient.post('/api/notebook-delete', { id: notebook.id }).then(response => {
+                apiClient.post('/api/notebook-delete', { id: notebook.notebook_id }).then(response => {
                   if (response.data.success) {
                     // 刷新笔记本列表
                     window.dispatchEvent(new Event('notebooks:refresh'));
                     // 如果当前正在查看被删除的笔记本，切换到其他笔记本
-                    if (window.location.hash.includes(`notebook=${notebook.id}`)) {
+                    if (window.location.hash.includes(`notebook=${notebook.notebook_id}`)) {
                       window.location.hash = '#/notes';
                     }
                   } else {
@@ -1308,9 +1313,9 @@ function AnalyticsTabsPage() {
   useEffect(() => {
     if (view === 'notes' && !activeNotebookId && notebooks.length > 0) {
       const firstNotebook = notebooks[0];
-      setActiveNotebookId(firstNotebook.id);
-      navigate(`/notes/${firstNotebook.id}`);
-      console.log('🔄 Auto-selecting first notebook:', firstNotebook.id);
+      setActiveNotebookId(firstNotebook.notebook_id);
+      navigate(`/notes/${firstNotebook.notebook_id}`);
+      console.log('🔄 Auto-selecting first notebook:', firstNotebook.notebook_id);
     }
   }, [view, activeNotebookId, notebooks, navigate]);
 
@@ -1396,8 +1401,8 @@ function AnalyticsTabsPage() {
                 navigate(`/notes/${activeNotebookId}`);
               } else if (notebooks.length > 0) {
                 const firstNotebook = notebooks[0];
-                setActiveNotebookId(firstNotebook.id);
-                navigate(`/notes/${firstNotebook.id}`);
+                setActiveNotebookId(firstNotebook.notebook_id);
+                navigate(`/notes/${firstNotebook.notebook_id}`);
               } else {
                 navigate('/notes');
               }
@@ -1420,18 +1425,18 @@ function AnalyticsTabsPage() {
             ) : (
               notebooks.map(notebook => (
                 <NotebookItem 
-                  key={notebook.id}
+                  key={notebook.notebook_id}
                   notebook={notebook}
-                  isActive={view === 'notes' && activeNotebookId === notebook.id}
+                  isActive={view === 'notes' && activeNotebookId === notebook.notebook_id}
                   onClick={() => { 
                     setView('notes'); 
-                    setActiveNotebookId(notebook.id);
-                    navigate(`/notes/${notebook.id}`);
+                    setActiveNotebookId(notebook.notebook_id);
+                    navigate(`/notes/${notebook.notebook_id}`);
                   }}
                   onRename={() => {
                     const newName = prompt('请输入新的笔记本名称:', notebook.name);
                     if (newName && newName.trim() && newName !== notebook.name) {
-                      apiClient.post('/api/notebook-rename', { id: notebook.id, name: newName.trim() }).then(() => {
+                      apiClient.post('/api/notebook-rename', { id: notebook.notebook_id, name: newName.trim() }).then(() => {
                         // 刷新笔记本列表
                         window.dispatchEvent(new Event('notebooks:refresh'));
                       }).catch(err => {
@@ -1512,10 +1517,10 @@ function AnalyticsTabsPage() {
                 <div className="space-y-2">
                   {notebooks.map(notebook => (
                     <button
-                      key={notebook.id}
+                      key={notebook.notebook_id}
                       onClick={() => {
-                        setActiveNotebookId(notebook.id);
-                        navigate(`/notes/${notebook.id}`);
+                        setActiveNotebookId(notebook.notebook_id);
+                        navigate(`/notes/${notebook.notebook_id}`);
                       }}
                       className="block w-full px-4 py-2 text-left bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
@@ -1550,7 +1555,7 @@ export default function App() {
       <Route path="/" element={<AnalyticsTabsPage />} />
       <Route path="/notes" element={<AnalyticsTabsPage />} />
       <Route path="/notes/:notebookId" element={<AnalyticsTabsPage />} />
-      <Route path="/note/:noteId" element={<NoteDetailPage />} />
+      <Route path="/notes/:noteId" element={<NoteDetailPage />} />
     </Routes>
   );
 }

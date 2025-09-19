@@ -25,3 +25,4 @@ lerna-debug.log*
 
 # Database files
 *.db
+.vercel

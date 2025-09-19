@@ -324,9 +324,9 @@ function DynamicMoveModal({ noteId, onClose }: { noteId: string; onClose: () => 
             >
               <option value="">请选择笔记本</option>
               {notebooks
-                .filter(notebook => notebook.id !== currentNotebookId)
+                .filter(notebook => notebook.notebook_id !== currentNotebookId)
                 .map(notebook => (
-                  <option key={notebook.id} value={notebook.id}>
+                  <option key={notebook.notebook_id} value={notebook.notebook_id}>
                     {notebook.name} ({notebook.note_count} 个笔记)
                   </option>
                 ))
