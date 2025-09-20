@@ -13,7 +13,7 @@
 
 .modal-content {
   background: white;
-  border-radius: 8px;
+  border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: 90%;
   max-width: 500px;
@@ -50,7 +50,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 8px;
   transition: background-color 0.2s;
 }
 
@@ -79,7 +79,7 @@
 .notebook-item {
   padding: 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
   background: #fafafa;
@@ -118,7 +118,7 @@
 .cancel-button,
 .move-button {
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

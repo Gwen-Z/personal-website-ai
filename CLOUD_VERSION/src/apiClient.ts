@@ -10,7 +10,7 @@ export interface Notebook {
 }
 
 export interface Note {
-  id: number;
+  note_id: string;
   notebook_id: string;
   title: string;
   image_url: string;

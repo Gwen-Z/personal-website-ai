@@ -115,7 +115,7 @@ export default function NewNoteModal({ isOpen, onClose, notebookId, onCreated }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-full max-w-3xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+      <div className="w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="text-base font-semibold text-slate-800">新建笔记</div>
           <button className="text-slate-500 hover:text-slate-700" onClick={onClose}>✕</button>
@@ -127,7 +127,7 @@ export default function NewNoteModal({ isOpen, onClose, notebookId, onCreated }:
             <label className="block text-sm text-slate-600 mb-1">标题</label>
             <input
               type="text"
-              className="w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-2xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="输入笔记标题"
               value={title}
               onChange={(e) => setTitle(e.target.value)}

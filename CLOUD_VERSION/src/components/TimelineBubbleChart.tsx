@@ -38,12 +38,12 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
   from,
   to,
 }) => {
-  // 主题类别映射到Y轴位置（大幅增加间距以容纳大气泡）
+  // 主题类别映射到Y轴位置（增加间距以避免标签重叠）
   const themeCategories = useMemo(() => {
     const themes = [...new Set(data.map(item => item.inspiration_theme).filter(Boolean))];
     return themes.reduce((acc, theme, index) => {
-      // 使用间距为4的等距分布，从4开始，确保大气泡不重叠
-      acc[theme] = (index + 1) * 4;
+      // 使用间距为6的等距分布，从6开始，为Y轴标签留出更多空间
+      acc[theme] = (index + 1) * 6;
       return acc;
     }, {} as Record<string, number>);
   }, [data]);
@@ -222,9 +222,9 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
     return { xAxisTicks: ticks, xAxisDomain: [domainStart, domainEnd] };
   }, [bubbleData, from, to]);
 
-  // 获取Y轴范围 - 从0开始，等距分布，增加顶部边距
+  // 获取Y轴范围 - 从0开始，等距分布，增加顶部和底部边距
   const maxY = Math.max(...Object.values(themeCategories).map(v => Number(v)), 0);
-  const yAxisDomain = [0, maxY + 4];
+  const yAxisDomain = [0, maxY + 6];
 
   return (
     <div className="w-full">
@@ -259,7 +259,7 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
               top: 20,
               right: 40,
               bottom: 60,
-              left: 60,
+              left: 100,
             }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -284,9 +284,9 @@ const TimelineBubbleChart: React.FC<TimelineBubbleChartProps> = ({
               ticks={[0, ...Object.values(themeCategories).map(v => Number(v))]}
               tickFormatter={formatYAxisLabel}
               tick={{ fontSize: 12 }}
-              width={50}
+              width={90}
               tickCount={Object.keys(themeCategories).length + 1}
-              label={{ value: '主题类别', angle: -90, position: 'insideLeft' }}
+              label={{ value: '主题类别', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', x: -25 } }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Scatter 

@@ -1998,7 +1998,6 @@ app.post('/api/notes', async (req, res) => {
       success: true, 
       message: 'Note created successfully',
       note: {
-        id: noteId,
         note_id: noteId,
         notebook_id,
         title,
@@ -2036,6 +2035,92 @@ app.post('/api/note-rename', async (req, res) => {
   } catch (error) {
     console.error('Error renaming note:', error);
     res.status(500).json({ success: false, message: 'Failed to rename note' });
+  }
+});
+
+// 更新笔记（PUT路由）
+app.put('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      title, 
+      content, 
+      content_text, 
+      source, 
+      original_url, 
+      author, 
+      upload_time,
+      image_urls,
+      images
+    } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Note id is required' });
+    }
+
+    // 构建更新字段
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (title !== undefined) {
+      updateFields.push('title = ?');
+      updateValues.push(title);
+    }
+    // 注释掉content字段，因为数据库表中可能没有这个列
+    // if (content !== undefined) {
+    //   updateFields.push('content = ?');
+    //   updateValues.push(content);
+    // }
+    if (content_text !== undefined) {
+      updateFields.push('content_text = ?');
+      updateValues.push(content_text);
+    }
+    if (source !== undefined) {
+      updateFields.push('source = ?');
+      updateValues.push(source);
+    }
+    if (original_url !== undefined) {
+      updateFields.push('original_url = ?');
+      updateValues.push(original_url);
+    }
+    if (author !== undefined) {
+      updateFields.push('author = ?');
+      updateValues.push(author);
+    }
+    if (upload_time !== undefined) {
+      updateFields.push('upload_time = ?');
+      updateValues.push(upload_time);
+    }
+    if (image_urls !== undefined) {
+      updateFields.push('image_urls = ?');
+      updateValues.push(image_urls);
+    }
+    if (images !== undefined) {
+      updateFields.push('images = ?');
+      updateValues.push(images);
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+    
+    // 添加更新时间
+    updateFields.push('updated_at = ?');
+    updateValues.push(new Date().toISOString());
+    
+    // 添加WHERE条件的id
+    updateValues.push(id);
+    
+    const sql = `UPDATE notes SET ${updateFields.join(', ')} WHERE note_id = ?`;
+    await db.run(sql, updateValues);
+
+    res.json({ 
+      success: true, 
+      message: 'Note updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating note:', error);
+    res.status(500).json({ success: false, message: 'Failed to update note' });
   }
 });
 

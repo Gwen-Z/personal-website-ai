@@ -203,7 +203,7 @@ export default function AIDataPage() {
     <div className="space-y-4">
       {/* 新增数据表单 - 放在最前面 */}
       <div className="rounded-2xl border bg-white p-4">
-        <div className="font-medium mb-3">📝 新增AI分析数据</div>
+        <div className="font-medium mb-3">📝 新增当天数据</div>
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>

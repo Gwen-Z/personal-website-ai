@@ -6,7 +6,7 @@ import MoveNoteModal from './MoveNoteModal';
 
 // Define types for our data
 interface Note {
-  id: string;
+  note_id: string;
   title: string;
   content: string;
   created_at: string;
@@ -31,7 +31,7 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
   const handleMoveNote = async (targetNotebookId: string) => {
     try {
       await apiClient.post('/api/note-move', { 
-        note_id: note.id, 
+        note_id: note.note_id, 
         target_notebook_id: targetNotebookId 
       });
       window.dispatchEvent(new Event('notes:refresh'));
@@ -63,14 +63,14 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
   }, [menuOpen]);
 
   const handleCardClick = (e: React.MouseEvent) => {
-    console.log('🖱️ 笔记卡片被点击, noteId:', note.id);
+    console.log('🖱️ 笔记卡片被点击, noteId:', note.note_id);
     // 检查点击是否来自菜单区域或其子元素
     const target = e.target as HTMLElement;
     const isMenuClick = target.closest('.dropdown-menu') || target.closest('.menu-button');
     
     if (!isMenuClick) {
-      console.log('✅ 触发笔记点击, 准备跳转到:', `/note/${note.id}`);
-      onNoteClick(note.id);
+      console.log('✅ 触发笔记点击, 准备跳转到:', `/note/${note.note_id}`);
+      onNoteClick(note.note_id);
     } else {
       console.log('❌ 点击来自菜单区域，忽略');
     }
@@ -78,11 +78,11 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
 
   return (
     <div 
-      className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between hover:shadow-sm transition-shadow duration-200 cursor-pointer"
+      className="bg-white p-4 rounded-2xl border border-gray-200 flex items-center justify-between hover:shadow-sm transition-shadow duration-200 cursor-pointer"
       onClick={handleCardClick}
     >
       <div className="flex items-center gap-4">
-        <div className="w-32 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-md flex items-center justify-center">
+        <div className="w-32 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-xl flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -90,11 +90,11 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
         <div className="flex flex-col justify-between h-20 py-1">
           {renaming ? (
             <div className="flex items-center gap-2">
-              <input className="border border-gray-300 rounded px-2 py-1 text-sm" value={newTitle} onChange={(e)=>setNewTitle(e.target.value)} />
+              <input className="border border-gray-300 rounded-lg px-2 py-1 text-sm" value={newTitle} onChange={(e)=>setNewTitle(e.target.value)} />
               <button 
                 onClick={async () => {
                   try {
-                    await apiClient.post('/api/note-rename', { id: note.id, title: newTitle });
+                    await apiClient.post('/api/note-rename', { id: note.note_id, title: newTitle });
                     setRenaming(false);
                     window.dispatchEvent(new Event('notes:refresh'));
                   } catch (error) {
@@ -102,11 +102,11 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
                     alert('重命名失败，请重试');
                   }
                 }} 
-                className="text-xs px-2 py-1 rounded bg-indigo-600 text-white"
+                className="text-xs px-2 py-1 rounded-lg bg-indigo-600 text-white"
               >
                 保存
               </button>
-              <button onClick={()=>{ setRenaming(false); setNewTitle(note.title); }} className="text-xs px-2 py-1 rounded border">取消</button>
+              <button onClick={()=>{ setRenaming(false); setNewTitle(note.title); }} className="text-xs px-2 py-1 rounded-lg border">取消</button>
             </div>
           ) : (
             <h2 className="font-semibold text-gray-800 leading-tight">{note.title}</h2>
@@ -182,7 +182,7 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
                 e.stopPropagation();
                 if (window.confirm('确定删除这条笔记吗？')) {
                   try {
-                    await apiClient.post('/api/note-delete', { id: note.id });
+                    await apiClient.post('/api/note-delete', { id: note.note_id });
                     window.dispatchEvent(new Event('notes:refresh'));
                   } catch (error) {
                     console.error('删除失败:', error);
@@ -199,12 +199,12 @@ const NoteItem = ({ note, onNoteClick, notebooks, currentNotebookId }: {
         )}
         <button 
           onClick={(e) => {
-            console.log('🔍 查看按钮被点击, noteId:', note.id);
+            console.log('🔍 查看按钮被点击, noteId:', note.note_id);
             e.stopPropagation();
-            console.log('✅ 准备跳转到:', `/note/${note.id}`);
-            onNoteClick(note.id);
+            console.log('✅ 准备跳转到:', `/note/${note.note_id}`);
+            onNoteClick(note.note_id);
           }} 
-          className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+          className="px-3 py-1.5 text-xs rounded-2xl border border-gray-300 text-gray-700 hover:bg-gray-50"
         >
           查看
         </button>
@@ -452,27 +452,28 @@ const NotesPage = ({ notebookId }: { notebookId: string }) => {
     <div className="p-6 h-full overflow-y-auto bg-gray-50">
       {/* Header Section */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center shadow-inner">
+        <div className="flex items-center gap-4 bg-white px-4 py-3 rounded-2xl border border-gray-200 shadow-sm">
+          <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-800">{notebook.name}</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              当前位置：<span className="text-purple-600 font-medium">{notebook.name}</span> &nbsp;·&nbsp; {new Date(notebook.updated_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} &nbsp;·&nbsp; {notebook.note_count} 篇笔记
-            </p>
+            <div className="text-sm text-gray-500 space-y-1">
+              <div>当前位置：<span className="text-purple-600 font-medium">{notebook.name}</span></div>
+              <div>创建于：{new Date(notebook.updated_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+              <div>笔记数：{notebook.note_count} 篇</div>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
             <div className="relative w-64">
-                <input type="text" placeholder="请输入搜索文件名称" className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                <input type="text" placeholder="请输入搜索文件名称" className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </div>
-            <button onClick={() => window.dispatchEvent(new Event('open:new-notebook'))} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap">
+            <button onClick={() => window.dispatchEvent(new Event('open:new-notebook'))} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-2xl hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
                 新建笔记本
             </button>
-            <button onClick={() => setModalOpen(true)} className="px-3 py-2 text-xs font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 whitespace-nowrap">新建笔记</button>
+            <button onClick={() => setModalOpen(true)} className="px-3 py-2 text-xs font-medium text-white bg-purple-600 rounded-2xl hover:bg-purple-700 whitespace-nowrap">新建笔记</button>
         </div>
       </div>
 
@@ -480,7 +481,7 @@ const NotesPage = ({ notebookId }: { notebookId: string }) => {
       <div className="space-y-4">
         {notes.map(note => (
           <NoteItem 
-            key={note.id} 
+            key={note.note_id} 
             note={note} 
             notebooks={notebooks}
             currentNotebookId={currentNotebookId}

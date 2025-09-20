@@ -256,7 +256,7 @@ export default function RawDataPage() {
       {/* 数据输入上传区域 */}
       <div className="rounded-2xl border bg-white p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">📝 {catLabel(category)}数据上传</h3>
+          <h3 className="text-lg font-semibold text-slate-800">🤖上传数据，AI生成分析</h3>
           <div className="text-sm text-slate-500">
             支持批量上传{catLabel(category)}数据，AI自动分析
           </div>

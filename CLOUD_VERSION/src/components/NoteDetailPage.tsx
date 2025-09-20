@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../apiClient';
 
 interface Note {
-  id: string;
+  note_id: string;
   notebook_id: string;
   title: string;
   content: string;
@@ -193,7 +193,7 @@ const NoteDetailPage: React.FC = () => {
     // 如果有笔记，立即保存图片到数据库
     if (note) {
       try {
-        const response = await apiClient.put(`/notes/${note.id}`, {
+        const response = await apiClient.put(`/api/notes/${note.note_id}`, {
           image_urls: JSON.stringify(newImages)
         });
         
@@ -227,7 +227,7 @@ const NoteDetailPage: React.FC = () => {
       const response = await apiClient.post('/doubao-analysis', {
         title,
         content,
-        noteId: noteData.id
+        noteId: noteData.note_id
       });
       
       if (response.data.success) {
@@ -270,23 +270,23 @@ const NoteDetailPage: React.FC = () => {
   const handleSave = async () => {
     if (!note) return;
     
+    const saveData = {
+      title: editTitle,
+      content_text: editContent,  // 只更新content_text字段
+      source: editSource,
+      original_url: editOriginalUrl,
+      author: editAuthor,
+      upload_time: editUploadTime,
+      image_urls: JSON.stringify(editImages)  // 同时保存图片
+    };
+    
     try {
-      const response = await apiClient.put(`/api/notes/${note.id}`, {
-        title: editTitle,
-        content: editContent,
-        content_text: editContent,  // 同时更新content_text字段
-        source: editSource,
-        original_url: editOriginalUrl,
-        author: editAuthor,
-        upload_time: editUploadTime,
-        image_urls: JSON.stringify(editImages)  // 同时保存图片
-      });
+      const response = await apiClient.put(`/api/notes/${note.note_id}`, saveData);
       
       if (response.data.success) {
         setNote(prev => prev ? { 
           ...prev, 
           title: editTitle, 
-          content: editContent,
           content_text: editContent,
           source: editSource,
           original_url: editOriginalUrl,
@@ -310,7 +310,7 @@ const NoteDetailPage: React.FC = () => {
     if (!note) return;
     
     try {
-      const response = await apiClient.put(`/api/notes/${note.id}`, {
+      const response = await apiClient.put(`/api/notes/${note.note_id}`, {
         image_urls: JSON.stringify(editImages)
       });
       
@@ -351,11 +351,51 @@ const NoteDetailPage: React.FC = () => {
     setIsEditingImages(false);
   };
 
+  const handleSaveMetadata = async () => {
+    if (!note) return;
+    
+    try {
+      const response = await apiClient.put(`/api/notes/${note.note_id}`, {
+        source: editSource,
+        original_url: editOriginalUrl,
+        author: editAuthor,
+        upload_time: editUploadTime
+      });
+      
+      if (response.data.success) {
+        setNote(prev => prev ? { 
+          ...prev, 
+          source: editSource,
+          original_url: editOriginalUrl,
+          author: editAuthor,
+          upload_time: editUploadTime
+        } : null);
+        setIsEditingMetadata(false);
+        alert('保存成功！');
+      } else {
+        alert('保存失败，请重试');
+      }
+    } catch (err) {
+      console.error('Save metadata error:', err);
+      alert('保存失败，请重试');
+    }
+  };
+
+  const handleCancelMetadata = () => {
+    if (note) {
+      setEditSource(note.source || '');
+      setEditOriginalUrl(note.original_url || '');
+      setEditAuthor(note.author || '');
+      setEditUploadTime(note.upload_time || '');
+    }
+    setIsEditingMetadata(false);
+  };
+
   const handleDelete = async () => {
     if (!note || !window.confirm('确定删除这条笔记吗？')) return;
     
     try {
-      await apiClient.post('/api/note-delete', { id: note.id });
+      await apiClient.post('/api/note-delete', { id: note.note_id });
       handleBack();
     } catch (err) {
       console.error('Failed to delete note:', err);
@@ -373,7 +413,7 @@ const NoteDetailPage: React.FC = () => {
     try {
       const response = await apiClient.post('/doubao-chat', {
         message: chatInput,
-        noteId: note.id,
+        noteId: note.note_id,
         noteTitle: note.title,
         noteContent: note.content_text || note.content
       });
@@ -395,7 +435,7 @@ const NoteDetailPage: React.FC = () => {
     try {
       const response = await apiClient.post('/doubao-chat-summary', {
         messages: chatMessages,
-        noteId: note?.id
+        noteId: note?.note_id
       });
       
       if (response.data.success) {
@@ -762,11 +802,11 @@ const NoteDetailPage: React.FC = () => {
                   <h4 className="text-md font-medium text-gray-700 mb-3">内容</h4>
                   <div className="bg-gray-50 rounded-xl p-4 min-h-[100px]">
                     {note.content_text ? (
-                      <div className="text-gray-700" dangerouslySetInnerHTML={{ 
+                      <div className="text-sm text-gray-700" dangerouslySetInnerHTML={{ 
                         __html: note.content_text.replace(/\n/g, '<br/>') 
                       }} />
                     ) : note.content ? (
-                      <div className="text-gray-700" dangerouslySetInnerHTML={{ 
+                      <div className="text-sm text-gray-700" dangerouslySetInnerHTML={{ 
                         __html: note.content.replace(/\n/g, '<br/>') 
                       }} />
                     ) : (
@@ -1006,36 +1046,106 @@ const NoteDetailPage: React.FC = () => {
 
                 {/* 元数据展示区域 */}
                 <div className="mt-6 border-t pt-6">
-                  <h4 className="inline-block px-3 py-1.5 text-base font-medium text-white bg-purple-600 rounded-xl mb-4">其他信息</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">来源:</span>
-                      <span className="text-gray-800">{note.source || '未填写'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">原链接:</span>
-                      <span className="text-gray-800 truncate max-w-48">
-                        {note.original_url ? (
-                          <a 
-                            href={note.original_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            {note.original_url}
-                          </a>
-                        ) : '未填写'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">作者:</span>
-                      <span className="text-gray-800">{note.author || '未填写'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">上传时间:</span>
-                      <span className="text-gray-800">{note.upload_time || '未填写'}</span>
-                    </div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="inline-block px-3 py-1.5 text-base font-medium text-white bg-purple-600 rounded-xl">其他信息</h4>
+                    {!isEditingMetadata ? (
+                      <button
+                        onClick={() => setIsEditingMetadata(true)}
+                        className="px-3 py-1.5 text-sm font-medium text-purple-600 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors"
+                      >
+                        编辑
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCancelMetadata}
+                          className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={handleSaveMetadata}
+                          className="px-3 py-1.5 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors"
+                        >
+                          保存
+                        </button>
+                      </div>
+                    )}
                   </div>
+                  
+                  {isEditingMetadata ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">来源</label>
+                        <input
+                          type="text"
+                          value={editSource}
+                          onChange={(e) => setEditSource(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="如：长桥app"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">原链接</label>
+                        <input
+                          type="url"
+                          value={editOriginalUrl}
+                          onChange={(e) => setEditOriginalUrl(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="原始链接地址"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">作者</label>
+                        <input
+                          type="text"
+                          value={editAuthor}
+                          onChange={(e) => setEditAuthor(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="作者名称"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">上传时间</label>
+                        <input
+                          type="datetime-local"
+                          value={editUploadTime}
+                          onChange={(e) => setEditUploadTime(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">来源:</span>
+                        <span className="text-gray-800">{note.source || '未填写'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">原链接:</span>
+                        <span className="text-gray-800 truncate max-w-48">
+                          {note.original_url ? (
+                            <a 
+                              href={note.original_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              {note.original_url}
+                            </a>
+                          ) : '未填写'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">作者:</span>
+                        <span className="text-gray-800">{note.author || '未填写'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">上传时间:</span>
+                        <span className="text-gray-800">{note.upload_time || '未填写'}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1055,7 +1165,7 @@ const NoteDetailPage: React.FC = () => {
                     <span className="ml-2">AI正在分析中...</span>
                   </div>
                 ) : aiAnalysis?.coreViewpoints ? (
-                  <p className="text-gray-700">{aiAnalysis.coreViewpoints}</p>
+                  <p className="text-sm text-gray-700">{aiAnalysis.coreViewpoints}</p>
                 ) : (
                   <p className="text-gray-400 italic">点击"AI助手"按钮开始分析</p>
                 )}
@@ -1097,7 +1207,7 @@ const NoteDetailPage: React.FC = () => {
                   <span className="ml-2">AI正在推荐相关资源...</span>
                 </div>
               ) : aiAnalysis?.knowledgeExtension ? (
-                <p className="text-gray-700">{aiAnalysis.knowledgeExtension}</p>
+                <p className="text-sm text-gray-700">{aiAnalysis.knowledgeExtension}</p>
               ) : (
                 <p className="text-gray-400 italic">AI在你写完笔记后，可以提示"想深入理解这个知识，可以去看看XXX(书籍/论文/相关案例)"</p>
               )}
@@ -1114,7 +1224,7 @@ const NoteDetailPage: React.FC = () => {
                   <span className="ml-2">AI正在生成学习路径...</span>
                 </div>
               ) : aiAnalysis?.learningPath ? (
-                <p className="text-gray-700">{aiAnalysis.learningPath}</p>
+                <p className="text-sm text-gray-700">{aiAnalysis.learningPath}</p>
               ) : (
                 <p className="text-gray-400 italic">如果你写的内容属于某个领域(如机器学习)，AI可以生成一条"学习路线图"(基础→进阶→应用)</p>
               )}
@@ -1127,7 +1237,7 @@ const NoteDetailPage: React.FC = () => {
             <p className="text-sm text-gray-600 mb-4">(总结你与AI助手的对话，记录你对这条笔记的困惑和理解)</p>
             <div className="bg-gray-50 rounded-xl p-4 min-h-[100px]">
               {chatSummary ? (
-                <p className="text-gray-700">{chatSummary}</p>
+                <p className="text-sm text-gray-700">{chatSummary}</p>
               ) : chatMessages.length > 0 ? (
                 <div className="flex items-center gap-2">
                   <button

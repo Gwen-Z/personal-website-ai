@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import { Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
 import apiClient from './apiClient';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, Brush, Cell, ReferenceLine } from 'recharts';
 import RawDataPage from './components/RawDataPage';
@@ -29,13 +29,14 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'inspiration', label: '捕捉灵感', icon: '💡' },
 ];
 
-function SectionHeader({ title, onAIClick, onDateChange, onQuery, defaultFromDate, defaultToDate }: { 
+function SectionHeader({ title, onAIClick, onDateChange, onQuery, defaultFromDate, defaultToDate, hideTitle = false }: { 
   title: string; 
   onAIClick?: () => void;
   onDateChange?: (from: string, to: string) => void;
   onQuery?: (from: string, to: string) => void;
   defaultFromDate?: string;
   defaultToDate?: string;
+  hideTitle?: boolean;
 }) {
   const [fromDate, setFromDate] = React.useState(defaultFromDate || '');
   const [toDate, setToDate] = React.useState(defaultToDate || '');
@@ -55,7 +56,7 @@ function SectionHeader({ title, onAIClick, onDateChange, onQuery, defaultFromDat
 
   return (
     <div className="mb-3 flex items-center justify-between gap-4 min-w-0">
-      <h2 className="text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap truncate">{title}</h2>
+      {!hideTitle && <h2 className="text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap truncate">{title}</h2>}
       <div className="flex items-center gap-2 shrink-0">
         <div className="hidden md:flex items-center gap-2 text-sm">
           <span className="text-slate-500">时间区间</span>
@@ -79,7 +80,16 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   );
 }
 
-type MoodPoint = { day: string; score: number | null; event?: string; emoji?: string };
+type MoodPoint = { 
+  day: string; 
+  score: number | null; 
+  event?: string; 
+  emoji?: string;
+  // AI分析字段
+  mood_event?: string;
+  mood_score?: number;
+  mood_category?: string;
+};
 
 const moodEmoji = (v: number) => (v>=5?'😄':v>=3?'🙂':v>=1?'😌':v>=0?'😐':v>=-1?'😣':'😫');
 
@@ -95,21 +105,10 @@ const MoodDot = (props: any) => {
   if (payload.score === null || payload.score === undefined) return null;
   
   const emoji = payload.emoji || moodEmoji(payload.score);
-  const title = payload.event || '';
-  const padX = 8;
-  const w = Math.max(48, title.length * 10 + padX * 2);
-  const h = 22;
-  const stickerY = cy + 18;
   
   return (
     <g>
       <text x={cx} y={cy - 22} textAnchor="middle" fontSize="18">{emoji}</text>
-      {title && (
-        <>
-          <rect x={cx - w/2} y={stickerY} rx={10} ry={10} width={w} height={h} fill="#fff" stroke="#E5E7EB"/>
-          <text x={cx} y={stickerY+15} textAnchor="middle" fontSize="12" fill="#111827">{title}</text>
-        </>
-      )}
       <circle cx={cx} cy={cy} r={3.5} fill="#6366F1" />
     </g>
   );
@@ -118,10 +117,13 @@ const MoodDot = (props: any) => {
 function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   const [data, setData] = React.useState<MoodPoint[]>([]);
   const getDefaultDateRange = () => {
-    // 使用包含测试数据的日期范围
+    // 近7天的数据（包含今天），确保显示7天
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // 从7天前开始
     return { 
-      from: '2025-08-27', 
-      to: '2025-08-29' 
+      from: sevenDaysAgo.toISOString().slice(0, 10), 
+      to: today.toISOString().slice(0, 10) // 包含今天
     };
   };
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange());
@@ -202,7 +204,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
         const params: any = {};
         if (dateRange.from) params.from = dateRange.from;
         if (dateRange.to) params.to = dateRange.to;
-        const res = await apiClient.get(`/simple-records`, { params });
+        const res = await apiClient.get(`/api/simple-records`, { params });
         const rows = Array.isArray(res.data.records) ? res.data.records : [];
         const pointsByDate: MoodPoint[] = rows
           .filter((r: any) => r.mood_description && r.mood_description.trim() !== '')
@@ -212,7 +214,16 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
             // 如果mood_score是有效数字则使用，否则从文本解析
             const score = (typeof rawScore === 'number' && !Number.isNaN(rawScore)) ? rawScore : parseMoodToScore(r.mood_description || '');
             const note = (r.mood_description || '');
-            return { day: dateStr, score, event: note.length > 15 ? note.substring(0, 15) + '…' : note, emoji: r.mood_emoji };
+            return { 
+              day: dateStr, 
+              score, 
+              event: note.length > 15 ? note.substring(0, 15) + '…' : note, 
+              emoji: r.mood_emoji,
+              // AI分析字段
+              mood_event: r.mood_event,
+              mood_score: r.mood_score,
+              mood_category: r.mood_category
+            };
           })
           .sort((a: MoodPoint, b: MoodPoint) => String(a.day).localeCompare(String(b.day)));
         const processedData = generateContinuousDateData(pointsByDate.length > 0 ? pointsByDate : []);
@@ -234,10 +245,76 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
   }, [dateRange]);
 
   const handleDateChange = (from: string, to: string) => setDateRange({ from, to });
+  const handleQuery = (from: string, to: string) => setDateRange({ from, to });
+
+  // 自定义心情Tooltip组件
+  const CustomMoodTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      if (!data || data.score === null) return null;
+      
+      return (
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg max-w-xs">
+          <div className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <span className="text-lg">{data.emoji || moodEmoji(data.score)}</span>
+            <span>心情记录</span>
+          </div>
+          <div className="text-sm text-gray-600 mb-2">{data.day}</div>
+          <div className="text-sm mb-3">{data.event || '无详细描述'}</div>
+          
+          {/* AI分析信息卡片 */}
+          <div className="bg-purple-50 rounded-lg p-3 mb-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-purple-800">心情事件(AI)</span>
+              <span className="text-sm text-purple-600">
+                {data.mood_event || '未分析'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-purple-800">分值(AI)</span>
+              <span 
+                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  (data.mood_score || data.score) >= 3 ? 'bg-green-500 text-white' :
+                  (data.mood_score || data.score) >= 1 ? 'bg-blue-500 text-white' :
+                  (data.mood_score || data.score) >= 0 ? 'bg-gray-500 text-white' :
+                  (data.mood_score || data.score) >= -1 ? 'bg-yellow-500 text-white' :
+                  (data.mood_score || data.score) >= -2 ? 'bg-orange-500 text-white' :
+                  'bg-red-500 text-white'
+                }`}
+              >
+                {data.mood_score !== undefined ? data.mood_score : data.score}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-purple-800">分类(AI)</span>
+              <span 
+                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  data.mood_category === '积极高' ? 'bg-green-100 text-green-800' :
+                  data.mood_category === '中性' ? 'bg-gray-100 text-gray-800' :
+                  data.mood_category === '特殊情' ? 'bg-blue-100 text-blue-800' :
+                  data.mood_category === '轻度消' ? 'bg-yellow-100 text-yellow-800' :
+                  data.mood_category === '中度消' ? 'bg-orange-100 text-orange-800' :
+                  data.mood_category === '高强度' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}
+              >
+                {data.mood_category || '未分类'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="text-xs text-gray-500">
+            <div>原始描述: {data.event || '无'}</div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <Card>
-      <SectionHeader title="情绪趋势" onAIClick={onAIClick} onDateChange={handleDateChange} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} />
+      <SectionHeader title="情绪趋势" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} hideTitle={true} />
       <div className="mb-2 text-sm text-slate-500">数据点数量: {data.length}</div>
       <div className="h-[260px] md:h-[320px] xl:h-[360px] rounded-xl bg-slate-50 p-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -269,7 +346,7 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
               }} 
             />
             <YAxis tick={{ fontSize: 12 }} domain={[-3, 5]} allowDecimals={true} tickCount={9} />
-            <Tooltip formatter={(v:any)=>[v,'分值']} labelFormatter={(l:any)=>l} />
+            <Tooltip content={<CustomMoodTooltip />} wrapperStyle={{ outline: 'none' }} />
             {data.length > 0 && (
               <Line type="monotone" dataKey="score" stroke="#6366F1" strokeWidth={3} dot={<MoodDot />} activeDot={{ r: 5 }} connectNulls={false} />
             )}
@@ -308,15 +385,28 @@ function EmotionTrend({ onAIClick }: { onAIClick?: () => void }) {
 }
 
 function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
-  type LifeBar = { date: string; calories: number; duration: number; durationLabel: string; desc: string; type?: string }
+  type LifeBar = { 
+    date: string; 
+    calories: number; 
+    duration: number; 
+    durationLabel: string; 
+    desc: string; 
+    type?: string; 
+    hours: number;
+    // AI分析字段
+    fitness_intensity?: string;
+    fitness_duration?: string;
+    fitness_calories?: string;
+    fitness_type?: string;
+  }
   const [bars, setBars] = React.useState<LifeBar[]>([])
   const getDefaultDateRange = () => {
     const today = new Date();
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(today.getDate() - 7);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // 从7天前开始
     return { 
-      from: oneWeekAgo.toISOString().slice(0, 10), 
-      to: today.toISOString().slice(0, 10) 
+      from: sevenDaysAgo.toISOString().slice(0, 10), 
+      to: today.toISOString().slice(0, 10) // 包含今天
     }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
@@ -328,7 +418,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
     const currentDate = new Date(minDate);
     while (currentDate <= maxDate) {
       const dateStr = currentDate.toISOString().slice(0, 10);
-      emptyData.push({ date: dateStr, calories: 0, duration: 0, type: '', durationLabel: '' });
+      emptyData.push({ date: dateStr, calories: 0, duration: 0, type: '', durationLabel: '', hours: 0 });
       currentDate.setDate(currentDate.getDate() + 1);
     }
     return emptyData;
@@ -346,7 +436,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
       if (existingData) {
         result.push(existingData)
       } else {
-        result.push({ date: dateStr, calories: 0, duration: 0, durationLabel: '', desc: '无运动记录', type: '无运动' })
+        result.push({ date: dateStr, calories: 0, duration: 0, durationLabel: '', desc: '无运动记录', type: '无运动', hours: 0 })
       }
       currentDate.setDate(currentDate.getDate() + 1)
     }
@@ -360,7 +450,8 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
     suggestions: '保持当前运动频率，可适当增加力量训练',
     typesCount: 0,
     totalCalories: 0,
-    totalMinutes: 0
+    totalMinutes: 0,
+    totalHours: 0
   })
 
   function parseNumber(s?: string): number { 
@@ -379,18 +470,42 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', maxWidth: 320 }}>
         <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>日期：{label}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 13, color: '#334155' }}>运动消耗：</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{item.calories} 卡</span>
-          {item.duration ? (<span style={{ marginLeft: 8, fontSize: 12, color: '#475569' }}>时长：{item.duration} 分钟</span>) : null}
+          <span style={{ fontSize: 13, color: '#334155' }}>运动时长：</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{item.hours.toFixed(1)} 小时</span>
+          {item.duration ? (<span style={{ marginLeft: 8, fontSize: 12, color: '#475569' }}>（{item.duration} 分钟）</span>) : null}
         </div>
         {item.desc ? (<div style={{ fontSize: 12, color: '#475569', lineHeight: 1.45, marginBottom: 8 }}>内容：{item.desc}</div>) : null}
-        {types.length ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {types.map((t, idx) => (
-              <span key={idx} style={{ background: TYPE_COLORS[t] || palette[idx % palette.length], color: '#fff', fontSize: 12, padding: '2px 8px', borderRadius: 9999 }}>{t}</span>
-            ))}
+        
+        {/* AI分析字段 */}
+        <div style={{ marginTop: 8, padding: 8, background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6, fontWeight: 500 }}>AI分析</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {item.fitness_intensity ? (
+              <div style={{ fontSize: 11 }}>
+                <span style={{ color: '#64748b' }}>强度(AI)：</span>
+                <span style={{ color: '#1e293b', fontWeight: 500 }}>{item.fitness_intensity}</span>
+              </div>
+            ) : null}
+            {item.fitness_duration ? (
+              <div style={{ fontSize: 11 }}>
+                <span style={{ color: '#64748b' }}>时长(AI)：</span>
+                <span style={{ color: '#1e293b', fontWeight: 500 }}>{item.fitness_duration}</span>
+              </div>
+            ) : null}
+            {item.fitness_calories ? (
+              <div style={{ fontSize: 11 }}>
+                <span style={{ color: '#64748b' }}>消耗(AI)：</span>
+                <span style={{ color: '#1e293b', fontWeight: 500 }}>{item.fitness_calories}</span>
+              </div>
+            ) : null}
+            {item.fitness_type ? (
+              <div style={{ fontSize: 11 }}>
+                <span style={{ color: '#64748b' }}>运动类型(AI)：</span>
+                <span style={{ color: '#1e293b', fontWeight: 500 }}>{item.fitness_type}</span>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
     )
   }
@@ -401,7 +516,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
         const params: any = {}
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
-        const res = await apiClient.get(`/simple-records`, { params })
+        const res = await apiClient.get(`/api/simple-records`, { params })
         const rows = Array.isArray(res.data.records) ? res.data.records : []
         const mapped: LifeBar[] = rows
           .filter((r: any) => r.fitness_calories || r.fitness_duration)
@@ -409,9 +524,22 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
             const date = (typeof r.date === 'string' && r.date.length >= 10) ? r.date.slice(0,10) : new Date(r.date).toISOString().slice(0,10)
             const calories = parseNumber(r.fitness_calories)
             const duration = parseNumber(r.fitness_duration)
+            const hours = duration / 60 // 将分钟转换为小时
             const type = r.fitness_type
             const desc = r.life_description || ''
-            return { date, calories, duration, durationLabel: duration ? `${duration}分钟` : '', desc, type }
+            return { 
+              date, 
+              calories, 
+              duration, 
+              durationLabel: duration ? `${duration}分钟` : '', 
+              desc, 
+              type, 
+              hours,
+              fitness_intensity: r.fitness_intensity || '',
+              fitness_duration: r.fitness_duration || '',
+              fitness_calories: r.fitness_calories || '',
+              fitness_type: r.fitness_type || ''
+            }
           })
           .sort((a: LifeBar, b: LifeBar) => a.date.localeCompare(b.date))
         const finalData = generateCompleteWeekData(mapped, dateRange)
@@ -419,11 +547,12 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
         const diversity = new Set(mapped.flatMap(m=>splitTypes(m.type)).filter(Boolean)).size
         const totalCal = mapped.reduce((s,m)=>s+m.calories,0)
         const totalMin = mapped.reduce((s,m)=>s+m.duration,0)
-        setLifeAnalysis(v => ({ ...v, typesCount: diversity, totalCalories: totalCal, totalMinutes: totalMin }))
+        const totalHours = mapped.reduce((s,m)=>s+m.hours,0)
+        setLifeAnalysis(v => ({ ...v, typesCount: diversity, totalCalories: totalCal, totalMinutes: totalMin, totalHours }))
       } catch (e) { 
         console.warn('API请求失败，无健身数据可显示', e);
         setBars([]);
-        setLifeAnalysis({ summary: '', causes: '', suggestions: '', typesCount: 0, totalCalories: 0, totalMinutes: 0 });
+        setLifeAnalysis({ summary: '', causes: '', suggestions: '', typesCount: 0, totalCalories: 0, totalMinutes: 0, totalHours: 0 });
       }
     }
     load()
@@ -434,7 +563,7 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
 
   return (
     <Card>
-      <SectionHeader title="健身打卡" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} />
+      <SectionHeader title="健身打卡" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} hideTitle={true} />
       <div className="mb-2 text-sm text-slate-500">数据点数量: {bars.length}</div>
       <div className="h-[320px] md:h-[380px] xl:h-[420px] rounded-xl bg-slate-50 p-4 relative">
         <ResponsiveContainer width="100%" height="100%">
@@ -458,13 +587,13 @@ function LifeTimeline({ onAIClick }: { onAIClick?: () => void }) {
             <YAxis 
               tick={{ fontSize: 12 }} 
               width={80} 
-              domain={[0, bars.length > 0 ? 'dataMax + 50' : 500]} 
-              tickCount={6} 
-              label={{ value: '卡路里', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }} 
+              domain={[0, 6]} 
+              ticks={[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6]}
+              label={{ value: '运动小时', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }} 
             />
             <Tooltip content={<CustomLifeTooltip />} wrapperStyle={{ outline: 'none' }} />
             {bars.length > 0 && (
-              <Bar dataKey="calories" name="运动消耗(卡)" barSize={18} radius={[4,4,0,0]}>
+              <Bar dataKey="hours" name="运动时长(小时)" barSize={18} radius={[4,4,0,0]}>
                 {bars.map((b, idx) => {
                   const types = splitTypes(b.type)
                   const first = types[0]
@@ -506,38 +635,42 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   const [studyBars, setStudyBars] = React.useState<StudyBar[]>([])
   const getDefaultDateRange = () => {
     const today = new Date();
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(today.getDate() - 7);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // 从7天前开始
     return { 
-      from: oneWeekAgo.toISOString().slice(0, 10), 
-      to: today.toISOString().slice(0, 10) 
+      from: sevenDaysAgo.toISOString().slice(0, 10), 
+      to: today.toISOString().slice(0, 10) // 包含今天
     }
   }
   const [dateRange, setDateRange] = React.useState<{from: string, to: string}>(getDefaultDateRange())
 
   const generateCompleteStudyWeekData = (realData: StudyBar[], dateRange: {from: string, to: string}): StudyBar[] => {
-    const result: StudyBar[] = []
-    const dataMap = new Map()
-    realData.forEach(item => { dataMap.set(item.date + '|' + item.category, item) })
-    const currentDate = new Date(dateRange.from)
+    // 生成完整的日期范围数据，确保所有日期都显示
+    const startDate = new Date(dateRange.from)
     const endDate = new Date(dateRange.to)
+    const completeData: StudyBar[] = []
     
-    // 确保每一天都有数据，即使没有实际学习记录
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().slice(0, 10)
-      const dayRecords = realData.filter(item => item.date === dateStr)
+    // 生成日期范围内的所有日期
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10)
+      const existingData = realData.filter(item => item.date === dateStr)
       
-      if (dayRecords.length === 0) {
-        // 如果没有该日期的数据，添加一个空记录来保持图表结构
-        result.push({ date: dateStr, hours: 0, description: '无学习记录', category: '其他', duration: '未提及' })
+      if (existingData.length > 0) {
+        // 如果该日期有数据，添加所有记录
+        completeData.push(...existingData)
       } else {
-        // 如果有数据，直接添加
-        result.push(...dayRecords)
+        // 如果该日期没有数据，添加一个空记录以确保日期显示
+        completeData.push({
+          date: dateStr,
+          hours: 0,
+          description: '',
+          category: '其他',
+          duration: ''
+        })
       }
-      currentDate.setDate(currentDate.getDate() + 1)
     }
     
-    return result.sort((a: StudyBar, b: StudyBar) => a.date.localeCompare(b.date))
+    return completeData
   }
 
   const [studyAnalysis, setStudyAnalysis] = React.useState({
@@ -550,7 +683,28 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   })
 
   const CATEGORY_COLORS: Record<string, string> = {
-    '外语': '#3b82f6', '编程': '#10b981', 'AI技术': '#f59e0b', 'AI应用': '#8b5cf6', '金融': '#ef4444', '心理学': '#06b6d4', '自媒体': '#f97316', '阅读': '#84cc16', '其他': '#6b7280'
+    // 主要学习种类 - 使用蓝绿紫青柔和色调
+    '外语': '#3b82f6',      // 蓝色 - 语言学习
+    '编程': '#10b981',      // 绿色 - 技术开发
+    'AI技术': '#8b5cf6',    // 紫色 - AI技术
+    'AI应用': '#06b6d4',    // 青色 - AI应用
+    '金融': '#6366f1',      // 靛蓝色 - 金融理财
+    '心理学': '#14b8a6',    // 青绿色 - 心理学
+    '自媒体': '#3b82f6',    // 蓝色 - 内容创作
+    '阅读': '#10b981',      // 绿色 - 阅读学习
+    
+    // 扩展学习种类 - 使用相近的蓝绿紫青色调
+    '语言学习': '#2563eb',  // 深蓝色
+    '考试准备': '#0891b2',  // 深青色
+    '技能学习': '#7c3aed',  // 深紫色
+    '记忆训练': '#059669',  // 深绿色
+    '翻译练习': '#06b6d4',  // 青色
+    '数学': '#14b8a6',      // 青绿色
+    '科学': '#6366f1',      // 靛蓝色
+    '历史': '#8b5cf6',      // 紫色
+    '艺术': '#3b82f6',      // 蓝色
+    '哲学': '#0f172a',      // 深黑色
+    '其他': '#6b7280'       // 灰色 - 默认
   }
   function parseNumber(s?: string): number { if (!s) return 0; const m = String(s).match(/\d+/); return m ? Number(m[0]) : 0 }
   function parseDuration(duration?: string): number {
@@ -613,18 +767,22 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
           const duration = item.payload[`${category}_duration`] || '未提及'
           return (
             <div key={index} style={{ marginBottom: index < validItems.length - 1 ? 8 : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'nowrap' }}>
                 <div style={{ 
                   background: CATEGORY_COLORS[category] || '#6b7280', 
                   color: '#fff', 
                   fontSize: 11, 
-                  padding: '2px 6px', 
-                  borderRadius: 4 
+                  padding: '3px 8px', 
+                  borderRadius: 6,
+                  whiteSpace: 'nowrap',
+                  fontWeight: '500',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  border: `1px solid ${CATEGORY_COLORS[category] || '#6b7280'}`
                 }}>
                   {category}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
-                  {hours > 0 ? `${hours}小时` : '未提及'}
+                  {hours > 0 ? `${Number(hours).toFixed(2)}小时` : '未提及'}
                 </span>
                 {duration !== '未提及' && (
                   <span style={{ fontSize: 11, color: '#64748b' }}>({duration})</span>
@@ -646,7 +804,7 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
         const params: any = {}
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
-        const res = await apiClient.get(`/simple-records`, { params })
+        const res = await apiClient.get(`/api/simple-records`, { params })
         const rows = Array.isArray(res.data.records) ? res.data.records : []
         const studyRecords = rows
           .filter((r: any) => r.study_description && r.study_description !== '无')
@@ -658,21 +816,8 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
             const duration = r.study_duration || '未提及'
             return { date, hours, description, category, duration }
           })
-        const groupedByDate = studyRecords.reduce((acc: Record<string, any>, record: StudyBar) => {
-          const key = `${record.date}-${record.category}`
-          if (!acc[key]) acc[key] = { date: record.date, category: record.category, hours: 0, descriptions: [] as string[], durations: [] as string[] }
-          acc[key].hours += record.hours
-          acc[key].descriptions.push(record.description)
-          acc[key].durations.push(record.duration)
-          return acc
-        }, {} as Record<string, any>)
-        const chartData = Object.values(groupedByDate).map((group: any) => ({
-          date: group.date,
-          hours: group.hours,
-          description: group.descriptions.join('、'),
-          category: group.category,
-          duration: group.durations.join('、')
-        })).sort((a: StudyBar, b: StudyBar) => a.date.localeCompare(b.date))
+        // 直接使用原始数据，不进行分组，让图表组件处理分组
+        const chartData = studyRecords.sort((a: StudyBar, b: StudyBar) => a.date.localeCompare(b.date))
         const completeWeekData = generateCompleteStudyWeekData(chartData, dateRange)
         setStudyBars(completeWeekData)
         analyzeStudyData(chartData)
@@ -703,19 +848,32 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   const handleDateChange = (from: string, to: string) => setDateRange({ from, to })
   const handleQuery = (from: string, to: string) => setDateRange({ from, to })
 
+  const allCategories = [...new Set(studyBars.map(item => item.category))]
+  
+  // 检查是否有真实的学习数据（hours > 0）
+  const hasRealData = studyBars.some(item => item.hours > 0)
+  const displayCategories = hasRealData ? allCategories : []
+
   const prepareGroupedData = () => {
-    const uniqueDates = [...new Set(studyBars.map(item => item.date))].sort()
-    const data = uniqueDates.map(date => {
-      const dateData: any = { date }
-      const dayRecords = studyBars.filter(item => item.date === date)
-      dayRecords.forEach(record => {
-        const category = record.category
-        dateData[category] = record.hours
-        dateData[`${category}_desc`] = record.description
-        dateData[`${category}_duration`] = record.duration
-      })
-      return dateData
-    })
+    // 按日期分组，每个日期包含所有学习种类的数据
+    const groupedByDate = studyBars.reduce((acc, record) => {
+      const date = record.date
+      if (!acc[date]) {
+        acc[date] = { date }
+        // 为所有可能的学习种类初始化
+        displayCategories.forEach(category => {
+          acc[date][category] = 0
+          acc[date][`${category}_desc`] = ''
+          acc[date][`${category}_duration`] = ''
+        })
+      }
+      acc[date][record.category] = record.hours
+      acc[date][`${record.category}_desc`] = record.description
+      acc[date][`${record.category}_duration`] = record.duration
+      return acc
+    }, {} as Record<string, any>)
+    
+    const data = Object.values(groupedByDate).sort((a: any, b: any) => a.date.localeCompare(b.date))
     
     // 如果没有数据，提供默认数据以确保轴显示
     if (data.length === 0) {
@@ -736,15 +894,10 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
   }
 
   const groupedData = prepareGroupedData()
-  const allCategories = [...new Set(studyBars.map(item => item.category))]
-  
-  // 检查是否有真实的学习数据（hours > 0）
-  const hasRealData = studyBars.some(item => item.hours > 0)
-  const displayCategories = hasRealData ? allCategories : []
 
   return (
     <Card>
-      <SectionHeader title="学习跟进" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} />
+      <SectionHeader title="学习跟进" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} hideTitle={true} />
       <div className="relative h-[400px] md:h-[450px] xl:h-[500px] rounded-xl bg-slate-50 p-6">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={groupedData} barCategoryGap="30%" barGap={0} margin={{ top: 60, right: 30, left: 60, bottom: 80 }}>
@@ -788,9 +941,31 @@ function StudyTimeDist({ onAIClick }: { onAIClick?: () => void }) {
               }} 
             />
             <Tooltip content={<CustomStudyTooltip />} wrapperStyle={{ outline: 'none' }} />
-            <Legend verticalAlign="top" height={40} iconType="rect" wrapperStyle={{ paddingBottom: '10px', fontSize: '12px' }} />
+            <Legend 
+              verticalAlign="top" 
+              height={50} 
+              iconType="rect" 
+              wrapperStyle={{ 
+                paddingBottom: '15px', 
+                fontSize: '12px',
+                fontWeight: '500'
+              }}
+              iconSize={12}
+              layout="horizontal"
+              align="center"
+            />
             {hasRealData && displayCategories.map(category => (
-              <Bar key={category} dataKey={category} name={category} fill={CATEGORY_COLORS[category] || '#6b7280'} barSize={24} stackId="study" />
+              <Bar 
+                key={category} 
+                dataKey={category} 
+                name={category} 
+                fill={CATEGORY_COLORS[category] || '#6b7280'} 
+                barSize={28} 
+                stackId="study"
+                radius={[0, 0, 4, 4]}
+                stroke={CATEGORY_COLORS[category] || '#6b7280'}
+                strokeWidth={1}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -853,11 +1028,13 @@ const TASK_TYPE_COLORS = {
 function WorkCompletion({ onAIClick }: { onAIClick?: () => void }) {
   const getDefaultDateRange = () => {
     const today = new Date();
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(today.getDate() - 7);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // 改为-6，这样从7天前到昨天正好是7天
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
     return { 
-      from: oneWeekAgo.toISOString().slice(0, 10), 
-      to: today.toISOString().slice(0, 10) 
+      from: sevenDaysAgo.toISOString().slice(0, 10), 
+      to: yesterday.toISOString().slice(0, 10) 
     };
   };
   const [dateRange, setDateRange] = useState(getDefaultDateRange());
@@ -899,7 +1076,7 @@ function WorkCompletion({ onAIClick }: { onAIClick?: () => void }) {
         const params: any = {};
         if (dateRange.from) params.from = dateRange.from;
         if (dateRange.to) params.to = dateRange.to;
-        const res = await apiClient.get(`/simple-records`, { params });
+        const res = await apiClient.get(`/api/simple-records`, { params });
         const rows = Array.isArray(res.data.records) ? res.data.records : [];
         const workRecords: WorkTask[] = rows
           .filter((r: any) => r.work_description)
@@ -1029,7 +1206,7 @@ function WorkCompletion({ onAIClick }: { onAIClick?: () => void }) {
 
   return (
     <Card>
-      <SectionHeader title="工作upup" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} />
+      <SectionHeader title="工作upup" onAIClick={onAIClick} onDateChange={handleDateChange} onQuery={handleQuery} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} hideTitle={true} />
       <div className="h-[560px] md:h-[600px] rounded-xl bg-white border border-slate-200 overflow-auto"><GanttChart /></div>
       <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         <div className="lg:col-span-2 bg-slate-50 rounded-xl p-4 min-h-[180px] flex flex-col">
@@ -1065,7 +1242,7 @@ const NotebookItem = ({
     <div className="relative group">
       <button
         onClick={onClick}
-        className={`w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs min-w-0 ${
+        className={`w-full flex items-center gap-2 rounded-2xl px-2 py-1.5 text-xs min-w-0 ${
           isActive ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
         }`}
       >
@@ -1135,11 +1312,11 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
   const [loading, setLoading] = React.useState(false)
   const getDefaultDateRange = () => {
     const today = new Date();
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(today.getDate() - 7);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // 从7天前开始
     return { 
-      from: oneWeekAgo.toISOString().slice(0, 10), 
-      to: today.toISOString().slice(0, 10) 
+      from: sevenDaysAgo.toISOString().slice(0, 10), 
+      to: today.toISOString().slice(0, 10) // 包含今天
     }
   }
   const [dateRange, setDateRange] = React.useState(getDefaultDateRange())
@@ -1170,7 +1347,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
         const params: any = {}
         if (dateRange.from) params.from = dateRange.from
         if (dateRange.to) params.to = dateRange.to
-        const res = await apiClient.get(`/simple-records`, { params })
+        const res = await apiClient.get(`/api/simple-records`, { params })
         const rows = Array.isArray(res.data.records) ? res.data.records : []
         const inspirationRows = rows.filter((r: any) => r.inspiration_description && String(r.inspiration_description).trim() !== '' && r.inspiration_description !== '没想法')
         const completeWeekData = generateCompleteInspirationWeekData(inspirationRows, dateRange)
@@ -1216,7 +1393,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
 
   return (
     <Card>
-      <SectionHeader title="捕捉灵感" onAIClick={onAIClick} onDateChange={handleDateChange} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} />
+      <SectionHeader title="捕捉灵感" onAIClick={onAIClick} onDateChange={handleDateChange} defaultFromDate={dateRange.from} defaultToDate={dateRange.to} hideTitle={true} />
       {loading ? (
         <div className="h-64 flex items-center justify-center text-gray-500"><div className="text-center"><div className="text-2xl mb-2">⏳</div><div>加载灵感数据中...</div></div></div>
       ) : (
@@ -1245,6 +1422,7 @@ function InspirationNotes({ onAIClick }: { onAIClick?: () => void }) {
 function AnalyticsTabsPage() {
   const { notebookId } = useParams<{ notebookId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   
   
   const [active, setActive] = useState<TabId>('emotion');
@@ -1280,6 +1458,49 @@ function AnalyticsTabsPage() {
       console.error('❌ Error message:', (error as any).message);
     }
   }, []);
+
+  // Handle URL path changes to set appropriate view
+  useEffect(() => {
+    const path = location.pathname;
+    console.log('🔍 URL path changed:', path);
+    
+    if (path === '/RawDataPage') {
+      setView('data');
+      setDataActive('raw');
+      setDataOpen(true);
+    } else if (path === '/AIDataPage') {
+      setView('data');
+      setDataActive('ai');
+      setDataOpen(true);
+    } else if (path === '/EmotionTrend') {
+      setView('category');
+      setActive('emotion');
+      setCatOpen(true);
+    } else if (path === '/FitnessData') {
+      setView('category');
+      setActive('life');
+      setCatOpen(true);
+    } else if (path === '/StudyTimeDist') {
+      setView('category');
+      setActive('study');
+      setCatOpen(true);
+    } else if (path === '/WorkCompletion') {
+      setView('category');
+      setActive('work');
+      setCatOpen(true);
+    } else if (path === '/InspirationNotes') {
+      setView('category');
+      setActive('inspiration');
+      setCatOpen(true);
+    } else if (path.startsWith('/notes/') && notebookId) {
+      setView('notes');
+      setActiveNotebookId(notebookId);
+    } else if (path === '/notes') {
+      setView('notes');
+    } else if (path === '/') {
+      setView('category');
+    }
+  }, [location.pathname, notebookId]);
 
   useEffect(() => {
     fetchNotebooks();
@@ -1372,18 +1593,31 @@ function AnalyticsTabsPage() {
         </button>
         {catOpen && (
           <nav className="mt-2 space-y-1 pl-6">
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => { setView('category'); setActive(t.id); setActiveNotebookId(null); }}
-                className={`w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs min-w-0 ${
-                  view === 'category' && active === t.id ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span>{t.icon}</span>
-                <span className="whitespace-nowrap">{t.label}</span>
-              </button>
-            ))}
+            {TABS.map(t => {
+              const getRoutePath = (tabId: TabId) => {
+                switch (tabId) {
+                  case 'emotion': return '/EmotionTrend';
+                  case 'life': return '/FitnessData';
+                  case 'study': return '/StudyTimeDist';
+                  case 'work': return '/WorkCompletion';
+                  case 'inspiration': return '/InspirationNotes';
+                  default: return '/';
+                }
+              };
+              
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => navigate(getRoutePath(t.id))}
+                  className={`w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs min-w-0 ${
+                    view === 'category' && active === t.id ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{t.icon}</span>
+                  <span className="whitespace-nowrap">{t.label}</span>
+                </button>
+              );
+            })}
           </nav>
         )}
 
@@ -1467,22 +1701,20 @@ function AnalyticsTabsPage() {
         {dataOpen && (
           <nav className="mt-2 space-y-1 pl-6">
             <button
-              onClick={() => { setView('data'); setDataActive('raw'); setActiveNotebookId(null); }}
+              onClick={() => navigate('/RawDataPage')}
               className={`w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs min-w-0 ${
                 view === 'data' && dataActive === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <span>📜</span>
-              <span className="whitespace-nowrap">AI分析结果</span>
+              <span className="whitespace-nowrap">🤖AI分析数据</span>
             </button>
             <button
-              onClick={() => { setView('data'); setDataActive('ai'); setActiveNotebookId(null); }}
+              onClick={() => navigate('/AIDataPage')}
               className={`w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs min-w-0 ${
                 view === 'data' && dataActive === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <span>🤖</span>
-              <span className="whitespace-nowrap">原始数据录入</span>
+              <span className="whitespace-nowrap">📒每日数据记录</span>
             </button>
           </nav>
         )}
@@ -1555,7 +1787,14 @@ export default function App() {
       <Route path="/" element={<AnalyticsTabsPage />} />
       <Route path="/notes" element={<AnalyticsTabsPage />} />
       <Route path="/notes/:notebookId" element={<AnalyticsTabsPage />} />
-      <Route path="/notes/:noteId" element={<NoteDetailPage />} />
+      <Route path="/note/:noteId" element={<NoteDetailPage />} />
+      <Route path="/RawDataPage" element={<AnalyticsTabsPage />} />
+      <Route path="/AIDataPage" element={<AnalyticsTabsPage />} />
+      <Route path="/EmotionTrend" element={<AnalyticsTabsPage />} />
+      <Route path="/FitnessData" element={<AnalyticsTabsPage />} />
+      <Route path="/StudyTimeDist" element={<AnalyticsTabsPage />} />
+      <Route path="/WorkCompletion" element={<AnalyticsTabsPage />} />
+      <Route path="/InspirationNotes" element={<AnalyticsTabsPage />} />
     </Routes>
   );
 }
