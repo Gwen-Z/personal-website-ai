@@ -1,5 +1,7 @@
 {
   "framework": "create-react-app",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "build",
   "env": {
     "TURSO_DATABASE_URL": "libsql://personal-website-data-gwen-z.aws-ap-northeast-1.turso.io",
     "TURSO_AUTH_TOKEN": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NTc2NTY4MzgsImlkIjoiODNlYTk1MTgtOWQwNC00MjAzLWJkNTEtMzlhMWNlNDI5NGEzIiwicmlkIjoiMGY3MWIzNDQtOTkzZC00MWE0LTlmMGYtOGEwYTQ0OWI2YTQ3In0.X5YU1QY27JEAIll0Ivj1VRSh7pupCv4vaEmRJ32DWwHr3_jG8vI7MdM9m7M2hrYS06SXkOYMYe-VMg4i1CHgDw"
