@@ -1,0 +1,11 @@
+{
+  "framework": "create-react-app",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "build",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
+}
