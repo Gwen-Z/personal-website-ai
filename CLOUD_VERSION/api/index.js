@@ -225,6 +225,14 @@ module.exports = async (req, res) => {
       
       return sendSuccess(res, stats[0] || {}, '仪表板数据获取成功');
 
+    } else if (path === '/api/health' && method === 'GET') {
+      // 健康检查端点
+      return sendSuccess(res, { 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        database: dbInitialized ? 'connected' : 'disconnected'
+      }, '服务健康检查通过');
+
     } else {
       // 404 - 未找到路由
       setCorsHeaders(res);
