@@ -27,6 +27,16 @@ app.use(express.static(path.join(process.cwd(), 'build'), {
   }
 }));
 
+// 调试页面路由
+app.get('/debug', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'debug_frontend.html'));
+});
+
+// 简单测试页面路由
+app.get('/test', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'simple_test.html'));
+});
+
 // SPA路由支持 - 所有非API请求返回index.html
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
@@ -368,21 +378,21 @@ app.get('/api/notebooks', async (req, res) => {
       
       // 创建默认笔记本
       await turso.execute(`
-        INSERT INTO notebooks (id, name, note_count) VALUES ('A1', '默认笔记本', 0)
+        INSERT INTO notebooks (notebook_id, name, note_count) VALUES ('A1', '默认笔记本', 0)
       `);
     }
     
     // 实时计算每个笔记本的笔记数量
     const result = await turso.execute(`
       SELECT 
-        n.id, 
+        n.notebook_id, 
         n.name, 
         n.created_at, 
         n.updated_at, 
         COUNT(no.note_id) as note_count
       FROM notebooks n
-      LEFT JOIN notes no ON n.id = no.notebook_id
-      GROUP BY n.id
+      LEFT JOIN notes no ON n.notebook_id = no.notebook_id
+      GROUP BY n.notebook_id
       ORDER BY n.created_at ASC
     `);
 
@@ -424,7 +434,7 @@ async function ensureDefaultNotebook() {
       console.log('📝 发现未关联的笔记，正在关联到默认笔记本...');
       const defaultNotebook = await selectAll('notebooks', 'LIMIT 1');
       if (defaultNotebook.length > 0) {
-        await query('UPDATE notes SET notebook_id = ? WHERE notebook_id IS NULL', [defaultNotebook[0].id]);
+        await query('UPDATE notes SET notebook_id = ? WHERE notebook_id IS NULL', [defaultNotebook[0].notebook_id]);
         console.log('✅ 已将所有笔记关联到默认笔记本');
       }
     }
@@ -446,11 +456,11 @@ app.get('/api/notes', async (req, res) => {
     if (notebook_id) {
       try {
         console.log('📚 查询笔记本信息...');
-        const notebooks = await selectAll('notebooks', 'WHERE id = ?', [notebook_id]);
+        const notebooks = await selectAll('notebooks', 'WHERE notebook_id = ?', [notebook_id]);
         console.log('📚 找到笔记本:', notebooks.length);
         if (notebooks.length > 0) {
           notebook = {
-            id: notebooks[0].id,
+            id: notebooks[0].notebook_id,
             name: notebooks[0].name,
             note_count: 0
           };
@@ -587,7 +597,12 @@ app.post('/api/note-rename', async (req, res) => {
     await ensureDbInitialized();
     const { id, title } = req.body;
     
-    await query('UPDATE notes SET title = ? WHERE id = ?', [title, id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    await query(`UPDATE notes SET title = ? WHERE note_id = ${noteId}`, [title]);
     
     res.json({
       success: true,
@@ -612,7 +627,7 @@ app.post('/api/notebook-rename', async (req, res) => {
       });
     }
     
-    await query('UPDATE notebooks SET name = ? WHERE id = ?', [name.trim(), id]);
+    await query('UPDATE notebooks SET name = ? WHERE notebook_id = ?', [name.trim(), id]);
     
     res.json({
       success: true,
@@ -634,7 +649,12 @@ app.post('/api/note-move', async (req, res) => {
     console.log('📝 准备移动笔记:', { note_id, target_notebook_id });
     
     // 使用正确的列名 note_id 而不是 id
-    const result = await query('UPDATE notes SET notebook_id = ? WHERE note_id = ?', [target_notebook_id, note_id]);
+    // 修复：验证note_id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(note_id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    const result = await query(`UPDATE notes SET notebook_id = ? WHERE note_id = ${noteId}`, [target_notebook_id]);
     console.log('📝 移动结果:', result);
     
     res.json({
@@ -653,7 +673,12 @@ app.post('/api/note-delete', async (req, res) => {
     await ensureDbInitialized();
     const { id } = req.body;
     
-    await query('DELETE FROM notes WHERE id = ?', [id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    await query(`DELETE FROM notes WHERE note_id = ${noteId}`);
     
     res.json({
       success: true,
@@ -681,7 +706,7 @@ app.post('/api/notebooks-create', async (req, res) => {
     const id = generateTursoId();
     
     const notebookData = {
-      id,
+      notebook_id: id,
       name,
       note_count: 0,
       created_at: new Date().toISOString(),
@@ -723,9 +748,9 @@ app.post('/api/notebook-delete', async (req, res) => {
     // 先检查笔记本是否存在
     let checkResult;
     if (id === null || id === 'null') {
-      checkResult = await query('SELECT id FROM notebooks WHERE id IS NULL');
+      checkResult = await query('SELECT notebook_id FROM notebooks WHERE notebook_id IS NULL');
     } else {
-      checkResult = await query('SELECT id FROM notebooks WHERE id = ?', [id]);
+      checkResult = await query('SELECT notebook_id FROM notebooks WHERE notebook_id = ?', [id]);
     }
     
     if (checkResult.length === 0) {
@@ -744,9 +769,9 @@ app.post('/api/notebook-delete', async (req, res) => {
     
     // 删除笔记本
     if (id === null || id === 'null') {
-      await query('DELETE FROM notebooks WHERE id IS NULL');
+      await query('DELETE FROM notebooks WHERE notebook_id IS NULL');
     } else {
-      await query('DELETE FROM notebooks WHERE id = ?', [id]);
+      await query('DELETE FROM notebooks WHERE notebook_id = ?', [id]);
     }
     
     res.json({
@@ -846,7 +871,12 @@ app.get('/api/notes/:id', async (req, res) => {
     console.log(`📝 获取笔记详情: ${id}`);
     
     // 获取笔记信息
-    const noteResult = await query('SELECT * FROM notes WHERE note_id = ?', [id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ error: 'Invalid note id' });
+    }
+    const noteResult = await query(`SELECT * FROM notes WHERE note_id = ${noteId}`);
     
     if (noteResult.rows.length === 0) {
       return res.status(404).json({ error: '笔记不存在' });
@@ -860,7 +890,7 @@ app.get('/api/notes/:id', async (req, res) => {
     // 获取笔记本信息
     let notebook = null;
     if (note.notebook_id) {
-      const notebookResult = await query('SELECT * FROM notebooks WHERE id = ?', [note.notebook_id]);
+      const notebookResult = await query('SELECT * FROM notebooks WHERE notebook_id = ?', [note.notebook_id]);
       if (notebookResult.rows.length > 0) {
         notebook = {};
         notebookResult.columns.forEach((col, i) => {
@@ -911,7 +941,12 @@ app.get('/api/note-detail-data', async (req, res) => {
 
     // Get note details (now from unified notes table)
     console.log('📝 Querying note with id:', id);
-    const noteRes = await query(`SELECT * FROM notes WHERE note_id = ?`, [id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ error: 'Invalid note id' });
+    }
+    const noteRes = await query(`SELECT * FROM notes WHERE note_id = ${noteId}`);
     console.log('📝 Note query result:', noteRes.rows.length, 'rows');
     
     if (noteRes.rows.length === 0) {
@@ -926,7 +961,7 @@ app.get('/api/note-detail-data', async (req, res) => {
 
     // Get notebook information
     console.log('📚 Querying notebook with id:', note.notebook_id);
-    const notebookRes = await query(`SELECT * FROM notebooks WHERE id = ?`, [note.notebook_id]);
+    const notebookRes = await query(`SELECT * FROM notebooks WHERE notebook_id = ?`, [note.notebook_id]);
     console.log('📚 Notebook query result:', notebookRes.rows.length, 'rows');
 
     let notebook = null;
@@ -1123,26 +1158,30 @@ app.put('/api/notes/:id', async (req, res) => {
     } = req.body || {};
     
     if (!id) return res.status(400).json({ success: false, error: 'Note ID required' });
-    if (!title || !String(title).trim()) return res.status(400).json({ success: false, error: 'Title required' });
+    // Title is optional for updates - only validate if provided
+    if (title !== undefined && (!title || !String(title).trim())) {
+      return res.status(400).json({ success: false, error: 'Title cannot be empty if provided' });
+    }
 
-    // Update all fields in the unified notes table
-    const updateData = {
-      title: String(title).trim(),
-      content_text: content_text || content || null,
-      core_points: core_points || null,
-      keywords: keywords || null,
-      knowledge_extension: knowledge_extension || null,
-      learning_path: learning_path || null,
-      ai_chat_summary: ai_chat_summary || null,
-      images: images || null,
-      image_urls: image_urls || null,
-      source: source || null,
-      original_url: original_url || null,
-      author: author || null,
-      upload_time: upload_time || null
-    };
+    // Update only provided fields in the unified notes table
+    const updateData = {};
+    
+    if (title !== undefined) updateData.title = String(title).trim();
+    if (content_text !== undefined) updateData.content_text = content_text;
+    if (content !== undefined) updateData.content_text = content;
+    if (core_points !== undefined) updateData.core_points = core_points;
+    if (keywords !== undefined) updateData.keywords = keywords;
+    if (knowledge_extension !== undefined) updateData.knowledge_extension = knowledge_extension;
+    if (learning_path !== undefined) updateData.learning_path = learning_path;
+    if (ai_chat_summary !== undefined) updateData.ai_chat_summary = ai_chat_summary;
+    if (images !== undefined) updateData.images = images;
+    if (image_urls !== undefined) updateData.image_urls = image_urls;
+    if (source !== undefined) updateData.source = source;
+    if (original_url !== undefined) updateData.original_url = original_url;
+    if (author !== undefined) updateData.author = author;
+    if (upload_time !== undefined) updateData.upload_time = upload_time;
 
-    await update('notes', updateData, `id = ?`, [Number(id)]);
+    await update('notes', updateData, `WHERE note_id = ?`, [Number(id)]);
     
     return res.status(200).json({ success: true });
   } catch (e) {
@@ -1856,20 +1895,20 @@ app.post('/api/sync-data', async (req, res) => {
           try {
             // 检查笔记本是否已存在
             const existingNotebook = await turso.execute({
-              sql: 'SELECT id FROM notebooks WHERE id = ?',
+              sql: 'SELECT notebook_id FROM notebooks WHERE notebook_id = ?',
               args: [notebook.id]
             });
             
             if (existingNotebook.rows.length > 0) {
               // 更新现有笔记本
               await turso.execute({
-                sql: 'UPDATE notebooks SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                sql: 'UPDATE notebooks SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE notebook_id = ?',
                 args: [notebook.name, notebook.id]
               });
             } else {
               // 插入新笔记本
               await turso.execute({
-                sql: 'INSERT INTO notebooks (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+                sql: 'INSERT INTO notebooks (notebook_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
                 args: [
                   notebook.id,
                   notebook.name,

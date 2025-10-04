@@ -1,70 +1,71 @@
 import { createClient } from '@libsql/client';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 加载环境变量
-dotenv.config({ path: path.join(__dirname, '../.env.local') });
 dotenv.config();
 
 async function checkTableStructure() {
   try {
-    console.log('🔍 检查数据库表结构...');
-    
-    // 连接Turso数据库
     const turso = createClient({
-      url: process.env.TURSO_DATABASE_URL || 'libsql://personal-website-data-gwen-z.aws-ap-northeast-1.turso.io',
-      authToken: process.env.TURSO_AUTH_TOKEN || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NTc2NTY4MzgsImlkIjoiODNlYTk1MTgtOWQwNC00MjAzLWJkNTEtMzlhMWNlNDI5NGEzIiwicmlkIjoiMGY3MWIzNDQtOTkzZC00MWE0LTlmMGYtOGEwYTQ0OWI2YTQ3In0.X5YU1QY27JEAIll0Ivj1VRSh7pupCv4vaEmRJ32DWwHr3_jG8vI7MdM9m7M2hrYS06SXkOYMYe-VMg4i1CHgDw',
+      url: 'libsql://personal-website-data-gwen-z.aws-ap-northeast-1.turso.io',
+      authToken: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NTc2NTY4MzgsImlkIjoiODNlYTk1MTgtOWQwNC00MjAzLWJkNTEtMzlhMWNlNDI5NGEzIiwicmlkIjoiMGY3MWIzNDQtOTkzZC00MWE0LTlmMGYtOGEwYTQ0OWI2YTQ3In0.X5YU1QY27JEAIll0Ivj1VRSh7pupCv4vaEmRJ32DWwHr3_jG8vI7MdM9m7M2hrYS06SXkOYMYe-VMg4i1CHgDw',
     });
 
-    // 检查notebooks表结构
-    console.log('\n📚 notebooks表结构:');
-    const notebooksSchema = await turso.execute("PRAGMA table_info(notebooks)");
-    console.log('notebooks表字段:');
-    for (const column of notebooksSchema.rows) {
-      console.log(`- ${column.name}: ${column.type} (nullable: ${column.notnull === 0})`);
-    }
-
+    console.log('🔍 检查表结构...');
+    
+    // 检查notebook表结构
+    console.log('\n📋 notebook表结构:');
+    const notebookSchema = await turso.execute('PRAGMA table_info(notebooks)');
+    notebookSchema.rows.forEach((col, i) => {
+      console.log(`  ${i + 1}. ${col.name} (${col.type}) ${col.notnull ? 'NOT NULL' : ''} ${col.pk ? 'PRIMARY KEY' : ''}`);
+    });
+    
     // 检查notes表结构
-    console.log('\n📝 notes表结构:');
-    const notesSchema = await turso.execute("PRAGMA table_info(notes)");
-    console.log('notes表字段:');
-    for (const column of notesSchema.rows) {
-      console.log(`- ${column.name}: ${column.type} (nullable: ${column.notnull === 0})`);
-    }
-
-    // 检查notebooks表的实际数据
-    console.log('\n📚 notebooks表实际数据:');
-    const notebooksResult = await turso.execute('SELECT * FROM notebooks');
-    console.log('notebooks表记录数:', notebooksResult.rows.length);
+    console.log('\n📋 notes表结构:');
+    const notesSchema = await turso.execute('PRAGMA table_info(notes)');
+    notesSchema.rows.forEach((col, i) => {
+      console.log(`  ${i + 1}. ${col.name} (${col.type}) ${col.notnull ? 'NOT NULL' : ''} ${col.pk ? 'PRIMARY KEY' : ''}`);
+    });
     
-    for (let i = 0; i < notebooksResult.rows.length; i++) {
-      const notebook = notebooksResult.rows[i];
-      console.log(`\n记录 ${i + 1}:`);
+    // 检查notebook表中的数据
+    console.log('\n📋 notebook表数据:');
+    const notebookData = await turso.execute('SELECT * FROM notebooks WHERE notebook_id = "AMG0D4V059U2TT"');
+    
+    if (notebookData.rows.length > 0) {
+      const notebook = notebookData.rows[0];
+      console.log('  找到笔记本数据:');
       Object.keys(notebook).forEach(key => {
-        console.log(`- ${key}: "${notebook[key]}" (类型: ${typeof notebook[key]})`);
+        const value = notebook[key];
+        if (typeof value === 'string' && value.length > 100) {
+          console.log(`    ${key}: ${value.substring(0, 100)}...`);
+        } else {
+          console.log(`    ${key}: ${value}`);
+        }
       });
+    } else {
+      console.log('  ❌ 未找到笔记本数据');
     }
-
-    // 检查notes表的实际数据
-    console.log('\n📝 notes表实际数据:');
-    const notesResult = await turso.execute('SELECT * FROM notes LIMIT 5');
-    console.log('notes表记录数:', notesResult.rows.length);
     
-    for (let i = 0; i < notesResult.rows.length; i++) {
-      const note = notesResult.rows[i];
-      console.log(`\n记录 ${i + 1}:`);
+    // 检查notes表中的数据
+    console.log('\n📋 notes表数据:');
+    const notesData = await turso.execute('SELECT * FROM notes WHERE note_id = 1017');
+    
+    if (notesData.rows.length > 0) {
+      const note = notesData.rows[0];
+      console.log('  找到笔记数据:');
       Object.keys(note).forEach(key => {
-        console.log(`- ${key}: "${note[key]}" (类型: ${typeof note[key]})`);
+        const value = note[key];
+        if (typeof value === 'string' && value.length > 100) {
+          console.log(`    ${key}: ${value.substring(0, 100)}...`);
+        } else {
+          console.log(`    ${key}: ${value}`);
+        }
       });
+    } else {
+      console.log('  ❌ 未找到笔记数据');
     }
-
+    
   } catch (error) {
     console.error('❌ 检查失败:', error);
-    console.error('错误详情:', error.message);
   }
 }
 

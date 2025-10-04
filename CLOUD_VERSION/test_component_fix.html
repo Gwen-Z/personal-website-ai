@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>组件重复修复测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>组件重复修复测试</h1>
+    <div id="test-results"></div>
+
+    <script>
+        async function testComponentFix() {
+            const resultsDiv = document.getElementById('test-results');
+            
+            try {
+                // 获取笔记数据
+                const response = await fetch('http://localhost:3001/api/notes/1015');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const note = data.note;
+                    const notebook = data.notebook;
+                    
+                    // 分析组件实例
+                    const componentInstances = note.component_instances || [];
+                    const analysisComponents = notebook.component_config?.analysisComponents || [];
+                    
+                    // 统计组件类型
+                    const componentTypes = componentInstances.map(comp => comp.type);
+                    const typeCount = {};
+                    componentTypes.forEach(type => {
+                        typeCount[type] = (typeCount[type] || 0) + 1;
+                    });
+                    
+                    // 检查分析组件重复
+                    const analysisTypeCount = {};
+                    analysisComponents.forEach(type => {
+                        analysisTypeCount[type] = (analysisTypeCount[type] || 0) + 1;
+                    });
+                    
+                    // 显示结果
+                    resultsDiv.innerHTML = `
+                        <div class="test-result info">
+                            <h3>📋 笔记组件实例 (${componentInstances.length}个)</h3>
+                            <pre>${JSON.stringify(componentInstances.map(c => ({type: c.type, title: c.title, id: c.id})), null, 2)}</pre>
+                        </div>
+                        
+                        <div class="test-result info">
+                            <h3>🤖 笔记本分析组件配置</h3>
+                            <pre>${JSON.stringify(analysisComponents, null, 2)}</pre>
+                        </div>
+                        
+                        <div class="test-result info">
+                            <h3>📊 组件类型统计</h3>
+                            <pre>${JSON.stringify(typeCount, null, 2)}</pre>
+                        </div>
+                        
+                        <div class="test-result ${Object.values(typeCount).some(count => count > 1) ? 'error' : 'success'}">
+                            <h3>${Object.values(typeCount).some(count => count > 1) ? '❌ 发现重复组件' : '✅ 没有重复组件'}</h3>
+                            <p>每个组件类型应该只有1个实例</p>
+                        </div>
+                        
+                        <div class="test-result info">
+                            <h3>🔍 分析组件检查</h3>
+                            <p>分析组件类型: ${analysisComponents.join(', ')}</p>
+                            <p>笔记中存在的分析组件: ${componentInstances.filter(c => analysisComponents.includes(c.type)).map(c => c.type).join(', ')}</p>
+                        </div>
+                    `;
+                    
+                } else {
+                    resultsDiv.innerHTML = `<div class="test-result error">❌ 获取笔记数据失败: ${JSON.stringify(data)}</div>`;
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="test-result error">❌ 测试失败: ${error.message}</div>`;
+            }
+        }
+        
+        // 页面加载后运行测试
+        window.addEventListener('load', testComponentFix);
+    </script>
+</body>
+</html>

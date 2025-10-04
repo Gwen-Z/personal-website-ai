@@ -15,19 +15,21 @@
 ## 📁 项目结构
 ```
 CLOUD_VERSION/
-├── src/                    # React 前端代码
-├── public/                 # 静态资源
-├── api/                    # Vercel API 函数
-│   ├── simple-records.js   # 数据查询 API
-│   ├── raw-entry.js        # 数据接收 API
-│   ├── dashboard.js        # 仪表板 API
-│   ├── ai-chat.js          # AI 聊天 API
-│   └── ai-analysis.js      # AI 分析 API
-├── lib/                    # 工具库
+├── frontend/              # React前端应用
+│   ├── src/               # React前端源码
+│   ├── public/            # 静态资源
+│   ├── build/             # 构建输出
+│   ├── landing-page/      # 着陆页
+│   └── package.json       # 前端配置
+├── backend/               # Node.js后端
+│   ├── app.js             # 主应用
+│   ├── db.js              # 数据库连接
+│   └── package.json       # 后端配置
+├── api/                   # Vercel API路由
+├── lib/                   # 共享库
 │   ├── turso.js           # Turso 数据库连接
 │   └── cloud-ai-service.js # 云端 AI 服务
-├── package.json           # 项目配置
-├── vercel.json           # Vercel 部署配置
+├── package.json           # 根项目配置
 └── README_CLOUD_DEPLOYMENT.md
 ```
 

@@ -16,7 +16,7 @@ async function processRawDataWithAI(rawData) {
 
 日期: ${rawData.date}
 心情: ${rawData.mood_text}
-生活: ${rawData.life_text || '无'}
+生活: ${rawData.fitness_text || '无'}
 学习: ${rawData.study_text}
 工作: ${rawData.work_text}
 灵感: ${rawData.inspiration_text}

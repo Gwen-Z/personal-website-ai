@@ -23,7 +23,7 @@ let db;
 const aiService = new AIService();
 
 // 确保使用Turso数据库
-console.log('🔧 强制使用Turso数据库');
+console.log('🔧 使用Turso数据库');
 process.env.TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || 'libsql://personal-website-data-gwen-z.aws-ap-northeast-1.turso.io';
 process.env.TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NTc2NTY4MzgsImlkIjoiODNlYTk1MTgtOWQwNC00MjAzLWJkNTEtMzlhMWNlNDI5NGEzIiwicmlkIjoiMGY3MWIzNDQtOTkzZC00MWE0LTlmMGYtOGEwYTQ0OWI2YTQ3In0.X5YU1QY27JEAIll0Ivj1VRSh7pupCv4vaEmRJ32DWwHr3_jG8vI7MdM9m7M2hrYS06SXkOYMYe-VMg4i1CHgDw';
 
@@ -884,7 +884,7 @@ app.post('/api/ai/chat', async (req, res) => {
 // AI聊天接口（前端弹窗专用）
 app.post('/api/ai-chat', async (req, res) => {
   try {
-    const { message, context, history } = req.body;
+    const { message, context, history, selectedNotes } = req.body;
     
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
@@ -907,9 +907,20 @@ app.post('/api/ai-chat', async (req, res) => {
       ).join('\n');
     }
 
+    // 构建选中笔记的上下文
+    let selectedNotesContext = '';
+    if (selectedNotes && Array.isArray(selectedNotes) && selectedNotes.length > 0) {
+      selectedNotesContext = '\n\n用户选中的笔记内容：\n';
+      selectedNotes.forEach((note, index) => {
+        selectedNotesContext += `${index + 1}. 【${note.title}】\n`;
+        selectedNotesContext += `   创建时间：${note.created_at}\n`;
+        selectedNotesContext += `   内容：${note.content}\n\n`;
+      });
+    }
+
     const fullPrompt = `${systemPrompt}
 
-${conversationHistory ? `历史对话：\n${conversationHistory}\n` : ''}
+${conversationHistory ? `历史对话：\n${conversationHistory}\n` : ''}${selectedNotesContext}
 用户问题：${message}
 
 请提供专业的回答：`;
@@ -991,6 +1002,127 @@ function generateMockReply(message, context) {
   }
   
   return `感谢你的问题！作为AI校招助手，我建议你：\n1. 明确自己的职业目标和兴趣方向\n2. 持续提升专业技能和综合素质\n3. 积极参与实习和项目实践\n4. 建立良好的人际网络和求职渠道\n\n如果你有更具体的问题，欢迎继续咨询！`;
+}
+
+// AI笔记总结API
+app.post('/api/ai-summary', async (req, res) => {
+  try {
+    const { notebook_id, notes, date_range } = req.body;
+    
+    if (!notes || notes.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '没有提供笔记数据' 
+      });
+    }
+
+    // 构建AI提示词
+    let prompt = `请分析以下笔记内容，生成一份综合总结报告：\n\n`;
+    
+    if (date_range && date_range.start && date_range.end) {
+      prompt += `时间范围：${date_range.start} 至 ${date_range.end}\n\n`;
+    }
+    
+    prompt += `笔记内容：\n`;
+    notes.forEach((note, index) => {
+      prompt += `${index + 1}. 【${note.title}】\n`;
+      prompt += `   创建时间：${note.created_at}\n`;
+      prompt += `   内容：${note.content}\n\n`;
+    });
+    
+    prompt += `请生成一份包含以下内容的总结报告：
+1. **内容概览**：简要总结所有笔记的主要内容和主题
+2. **时间趋势**：分析笔记内容在时间上的变化趋势
+3. **关键洞察**：提取重要的观点、想法或发现
+4. **行动建议**：基于笔记内容提出具体的改进建议
+5. **总结反思**：对整体内容进行深度思考和总结
+
+请用中文回答，语言要专业但易懂，结构清晰。`;
+
+    let summary = '';
+    try {
+      if (USE_OLLAMA) {
+        // 优先使用 Ollama
+        try {
+          const { data } = await axios.post('http://localhost:11434/api/generate', {
+            model: OLLAMA_MODEL,
+            prompt: prompt,
+            stream: false
+          });
+          summary = data.response || '';
+        } catch (ollamaError) {
+          console.error('Ollama error:', ollamaError);
+          // Ollama 失败，尝试云 AI 服务
+          if (aiService && (aiService.openaiApiKey || aiService.anthropicApiKey)) {
+            summary = await aiService.chat(prompt);
+          } else {
+            summary = generateMockNotesSummary(notes, date_range);
+          }
+        }
+      } else {
+        // 使用云 AI 服务
+        if (aiService && (aiService.openaiApiKey || aiService.anthropicApiKey)) {
+          summary = await aiService.chat(prompt);
+        } else {
+          // 回退到 Ollama
+          const { data } = await axios.post('http://localhost:11434/api/generate', {
+            model: OLLAMA_MODEL,
+            prompt: prompt,
+            stream: false
+          });
+          summary = data.response || '';
+        }
+      }
+    } catch (aiError) {
+      console.error('AI service error:', aiError);
+      summary = generateMockNotesSummary(notes, date_range);
+    }
+    
+    res.json({ 
+      success: true,
+      summary: summary || 'AI总结生成失败，请重试',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('AI summary error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'AI总结服务暂时不可用',
+      summary: '抱歉，AI总结服务暂时不可用，请稍后再试。'
+    });
+  }
+});
+
+// 模拟笔记总结函数
+function generateMockNotesSummary(notes, date_range) {
+  const noteCount = notes.length;
+  const dateRangeText = date_range ? `（${date_range.start} 至 ${date_range.end}）` : '';
+  
+  return `# 笔记总结报告 ${dateRangeText}
+
+## 📊 内容概览
+基于 ${noteCount} 篇笔记的分析，主要涵盖了以下主题：
+${notes.map((note, index) => `- ${note.title}`).join('\n')}
+
+## 📈 时间趋势
+从笔记的创建时间分布来看，内容记录较为${noteCount > 5 ? '丰富' : '集中'}，体现了${noteCount > 10 ? '持续' : '阶段性'}的记录习惯。
+
+## 💡 关键洞察
+1. **内容多样性**：笔记内容涵盖了多个方面，展现了全面的思考
+2. **记录习惯**：${noteCount > 5 ? '良好的记录习惯有助于知识积累' : '建议增加记录频率以更好地追踪进展'}
+3. **思考深度**：从笔记内容可以看出深度的思考和反思
+
+## 🎯 行动建议
+1. **持续记录**：保持当前的记录习惯，定期回顾和总结
+2. **主题深化**：对感兴趣的主题进行更深入的探索和记录
+3. **知识整合**：尝试将不同笔记中的观点进行关联和整合
+4. **定期回顾**：建议每周或每月进行一次笔记回顾和总结
+
+## 🔍 总结反思
+这些笔记记录了你${date_range ? '在指定时间段内' : '近期'}的思考和经历，是宝贵的个人知识资产。建议继续保持记录习惯，并定期进行总结和反思，这将有助于个人成长和知识积累。
+
+---
+*此报告由AI自动生成，仅供参考*`;
 }
 
 
@@ -1109,14 +1241,14 @@ app.post('/api/raw-entry', async (req, res) => {
   logToFile('--- Received request for /api/raw-entry ---');
   try {
     logToFile(`Request body: ${JSON.stringify(req.body, null, 2)}`);
-    const { date, mood_text, life_text, study_text, work_text, inspiration_text } = req.body;
+    const { date, mood_text, fitness_text, study_text, work_text, inspiration_text } = req.body;
     
     if (!date) {
       return res.status(400).json({ message: 'Date is required' });
     }
 
     // 验证至少有一个内容字段不为空
-    if (!mood_text?.trim() && !life_text?.trim() && !study_text?.trim() && !work_text?.trim() && !inspiration_text?.trim()) {
+    if (!mood_text?.trim() && !fitness_text?.trim() && !study_text?.trim() && !work_text?.trim() && !inspiration_text?.trim()) {
       return res.status(400).json({ message: 'At least one content field must not be empty' });
     }
 
@@ -1126,7 +1258,7 @@ app.post('/api/raw-entry', async (req, res) => {
       : { mood_emoji: '😐', mood_event: '无特别事件', mood_score: 0, mood_category: '中性' };
     
     // 为健身描述生成AI总结
-    const fitnessSummary = await generateFitnessSummary(life_text);
+    const fitnessSummary = await generateFitnessSummary(fitness_text);
 
     // 保存到简化记录表，包含AI总结（使用 db.run + 位置占位符）
     const result = await db.run(
@@ -1134,7 +1266,7 @@ app.post('/api/raw-entry', async (req, res) => {
       [
         date,
         mood_text || '',
-        life_text || '',
+        fitness_text || '',
         study_text || '',
         work_text || '',
         inspiration_text || '',
@@ -1151,11 +1283,11 @@ app.post('/api/raw-entry', async (req, res) => {
 
     // 同时保存到 raw_entries（备份）
     await db.run(
-      'INSERT INTO raw_entries (date, mood_text, life_text, study_text, work_text, inspiration_text) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO raw_entries (date, mood_text, fitness_text, study_text, work_text, inspiration_text) VALUES (?, ?, ?, ?, ?, ?)',
       [
         date,
         mood_text || '',
-        life_text || '',
+        fitness_text || '',
         study_text || '',
         work_text || '',
         inspiration_text || ''
@@ -1168,7 +1300,7 @@ app.post('/api/raw-entry', async (req, res) => {
       data: {
         date,
         mood_description: mood_text || '',
-        life_description: life_text || '',
+        life_description: fitness_text || '',
         study_description: study_text || '',
         work_description: work_text || '',
         inspiration_description: inspiration_text || '',
@@ -1197,7 +1329,7 @@ async function processRawDataWithAI(rawData) {
 
 日期: ${rawData.date}
 心情: ${rawData.mood_text}
-生活: ${rawData.life_text}
+生活: ${rawData.fitness_text}
 学习: ${rawData.study_text}
 工作: ${rawData.work_text}
 灵感: ${rawData.inspiration_text}
@@ -1718,13 +1850,15 @@ app.get('/api/notebooks', async (req, res) => {
         
         notebooksWithCount.push({
           ...notebook,
-          note_count: noteCount
+          note_count: noteCount,
+          component_config: notebook.component_config ? JSON.parse(notebook.component_config) : null
         });
       } catch (error) {
         console.error(`❌ 查询笔记本 ${notebook.notebook_id} 笔记数量时出错:`, error);
         notebooksWithCount.push({
           ...notebook,
-          note_count: 0
+          note_count: 0,
+          component_config: notebook.component_config ? JSON.parse(notebook.component_config) : null
         });
       }
     }
@@ -1734,7 +1868,9 @@ app.get('/api/notebooks', async (req, res) => {
       notebooks: notebooksWithCount.map(notebook => ({
         notebook_id: notebook.notebook_id,
         name: notebook.name,
+        description: notebook.description,
         note_count: notebook.note_count || 0,
+        component_config: notebook.component_config,
         created_at: notebook.created_at,
         updated_at: notebook.updated_at
       }))
@@ -1745,10 +1881,53 @@ app.get('/api/notebooks', async (req, res) => {
   }
 });
 
+// 获取单个笔记本
+app.get('/api/notebooks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Notebook id is required' });
+    }
+
+    const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [id]);
+    
+    if (!notebook) {
+      return res.status(404).json({ success: false, message: 'Notebook not found' });
+    }
+
+    // 获取笔记数量
+    const countResult = await db.all(
+      'SELECT COUNT(*) as count FROM notes WHERE notebook_id = ?',
+      [id]
+    );
+    const noteCount = countResult[0]?.count || 0;
+
+    // 解析组件配置
+    const componentConfig = notebook.component_config ? JSON.parse(notebook.component_config) : null;
+
+    res.json({ 
+      success: true, 
+      notebook: {
+        notebook_id: notebook.notebook_id,
+        name: notebook.name,
+        description: notebook.description,
+        note_count: noteCount,
+        component_config: componentConfig,
+        created_at: notebook.created_at,
+        updated_at: notebook.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching notebook:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch notebook' });
+  }
+});
+
 // 创建笔记本
 app.post('/api/notebooks', async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, description, componentConfig } = req.body;
     
     if (!name) {
       return res.status(400).json({ success: false, message: 'Notebook name is required' });
@@ -1763,9 +1942,12 @@ app.post('/api/notebooks', async (req, res) => {
 
     const id = generateTursoId();
     
+    // 将组件配置转换为JSON字符串存储
+    const componentConfigJson = componentConfig ? JSON.stringify(componentConfig) : null;
+    
     await db.run(
-      'INSERT INTO notebooks (notebook_id, name, note_count) VALUES (?, ?, ?)',
-      [id, name, 0]
+      'INSERT INTO notebooks (notebook_id, name, description, note_count, component_config) VALUES (?, ?, ?, ?, ?)',
+      [id, name, description || null, 0, componentConfigJson]
     );
 
     res.status(201).json({ 
@@ -1774,7 +1956,9 @@ app.post('/api/notebooks', async (req, res) => {
       notebook: {
         notebook_id: id,
         name,
+        description: description || null,
         note_count: 0,
+        component_config: componentConfig,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -1785,13 +1969,70 @@ app.post('/api/notebooks', async (req, res) => {
   }
 });
 
+// 更新笔记本配置
+app.put('/api/notebooks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { componentConfig, syncToNotes = true } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Notebook id is required' });
+    }
+
+    // 将组件配置转换为JSON字符串存储
+    const componentConfigJson = componentConfig ? JSON.stringify(componentConfig) : null;
+    
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const configJson = componentConfigJson ? componentConfigJson.replace(/'/g, "''") : 'null';
+    const updateQuery = `UPDATE notebooks SET component_config = '${configJson}', updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${id}'`;
+    
+    console.log('🔧 更新笔记本配置查询:', updateQuery.substring(0, 100) + '...');
+    await db.run(updateQuery);
+
+    // 如果启用了同步到笔记，更新所有相关笔记的组件实例
+    if (syncToNotes && componentConfig && componentConfig.componentInstances) {
+      console.log(`🔄 同步组件配置到笔记本 ${id} 的所有笔记...`);
+      
+      // 获取该笔记本下的所有笔记
+      const notes = await db.all('SELECT note_id FROM notes WHERE notebook_id = ?', [id]);
+      console.log(`📝 找到 ${notes.length} 个笔记需要同步`);
+      
+      // 更新每个笔记的组件实例
+      for (const note of notes) {
+        try {
+          const componentInstancesJson = JSON.stringify(componentConfig.componentInstances);
+          const noteUpdateQuery = `UPDATE notes SET component_instances = '${componentInstancesJson.replace(/'/g, "''")}', updated_at = '${new Date().toISOString()}' WHERE note_id = ${note.note_id}`;
+          await db.run(noteUpdateQuery);
+          console.log(`✅ 同步笔记 ${note.note_id} 的组件实例`);
+        } catch (e) {
+          console.error(`❌ 同步笔记 ${note.note_id} 失败:`, e);
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Notebook configuration updated successfully',
+      syncedNotes: syncToNotes ? (await db.all('SELECT note_id FROM notes WHERE notebook_id = ?', [id])).length : 0
+    });
+  } catch (error) {
+    console.error('Error updating notebook configuration:', error);
+    res.status(500).json({ success: false, message: 'Failed to update notebook configuration' });
+  }
+});
+
 app.get('/api/notes', async (req, res) => {
   try {
     const { notebook_id, id } = req.query;
     
     // 如果提供了id参数，返回单条笔记
     if (id) {
-      const note = await db.get('SELECT * FROM notes WHERE note_id = ?', [id]);
+      // 修复：验证id是有效整数，然后使用字符串拼接查询
+      const noteId = parseInt(id, 10);
+      if (isNaN(noteId) || noteId <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid note id' });
+      }
+      const note = await db.get(`SELECT * FROM notes WHERE note_id = ${noteId}`);
       if (!note) {
         return res.status(404).json({ success: false, message: 'Note not found' });
       }
@@ -1814,7 +2055,9 @@ app.get('/api/notes', async (req, res) => {
         notebook: notebook ? {
           notebook_id: notebook.notebook_id,
           name: notebook.name,
+          description: notebook.description,
           note_count: notebook.note_count || 0,
+          component_config: notebook.component_config ? JSON.parse(notebook.component_config) : null,
           created_at: notebook.created_at,
           updated_at: notebook.updated_at
         } : null
@@ -1835,6 +2078,7 @@ app.get('/api/notes', async (req, res) => {
     }
 
     console.log('📚 找到笔记本:', notebook.name);
+    console.log('📚 笔记本完整数据:', JSON.stringify(notebook, null, 2));
 
     // 先检查笔记数量，避免查询过多数据
     let noteCount = 0;
@@ -1872,7 +2116,9 @@ app.get('/api/notes', async (req, res) => {
       notebook: {
         notebook_id: notebook.notebook_id,
         name: notebook.name,
+        description: notebook.description,
         note_count: noteCount,
+        component_config: notebook.component_config ? JSON.parse(notebook.component_config) : null,
         created_at: notebook.created_at,
         updated_at: notebook.updated_at
       },
@@ -1890,6 +2136,8 @@ app.get('/api/notes', async (req, res) => {
         author: note.author || '',
         upload_time: note.upload_time || '',
         duration_minutes: note.duration_minutes,
+        component_data: note.component_data ? (typeof note.component_data === 'string' ? JSON.parse(note.component_data) : note.component_data) : {},
+        selected_analysis_components: note.selected_analysis_components ? (typeof note.selected_analysis_components === 'string' ? JSON.parse(note.selected_analysis_components) : note.selected_analysis_components) : [],
         created_at: note.created_at,
         updated_at: note.updated_at,
         status: 'success'
@@ -1910,7 +2158,10 @@ app.post('/api/notebook-rename', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Notebook id and name are required' });
     }
 
-    await db.run('UPDATE notebooks SET name = ?, updated_at = ? WHERE notebook_id = ?', [name, new Date().toISOString(), id]);
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const escapedName = name.replace(/'/g, "''");
+    const updateQuery = `UPDATE notebooks SET name = '${escapedName}', updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${id}'`;
+    await db.run(updateQuery);
 
     res.json({ 
       success: true, 
@@ -1958,26 +2209,54 @@ app.post('/api/notes', async (req, res) => {
       source_url, 
       original_url, 
       author, 
-      upload_time 
+      upload_time,
+      component_data,
+      selected_analysis_components,
+      component_instances
     } = req.body;
     
     if (!notebook_id || !title) {
       return res.status(400).json({ success: false, message: 'Notebook id and title are required' });
     }
 
-    // 生成Turso格式的ID
-    const generateTursoId = () => {
-      const timestamp = Date.now().toString(36);
-      const random = Math.random().toString(36).substr(2, 5);
-      return `N${timestamp}${random}`.toUpperCase();
+    // 获取笔记本的组件配置
+    console.log(`🔍 获取笔记本 ${notebook_id} 的组件配置...`);
+    const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [notebook_id]);
+    if (!notebook) {
+      return res.status(404).json({ success: false, message: 'Notebook not found' });
+    }
+
+    // 解析笔记本的组件配置
+    let notebookComponentConfig = null;
+    if (notebook.component_config) {
+      try {
+        notebookComponentConfig = JSON.parse(notebook.component_config);
+        console.log(`📋 笔记本组件配置解析成功:`, notebookComponentConfig);
+      } catch (e) {
+        console.error('❌ 解析笔记本组件配置失败:', e);
+      }
+    }
+
+    // 生成数字ID
+    const generateNoteId = async () => {
+      const result = await db.execute('SELECT MAX(note_id) as max_id FROM notes');
+      const maxId = result.rows[0]?.max_id || 1000;
+      return maxId + 1;
     };
 
-    const noteId = generateTursoId();
+    const noteId = await generateNoteId();
+    
+    // 如果没有提供组件实例，从笔记本配置中继承
+    let finalComponentInstances = component_instances;
+    if (!finalComponentInstances && notebookComponentConfig && notebookComponentConfig.componentInstances) {
+      console.log(`🔄 从笔记本继承组件实例:`, notebookComponentConfig.componentInstances);
+      finalComponentInstances = notebookComponentConfig.componentInstances;
+    }
     
     await db.run(
-      'INSERT INTO notes (note_id, notebook_id, title, content_text, images, source_url, original_url, author, upload_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO notes (note_id, notebook_id, title, content_text, images, source_url, original_url, author, upload_time, component_data, selected_analysis_components, component_instances, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        noteId, 
+        noteId.toString(), 
         notebook_id, 
         title, 
         content_text || '', 
@@ -1986,13 +2265,18 @@ app.post('/api/notes', async (req, res) => {
         original_url || null,
         author || null,
         upload_time || null,
+        component_data ? JSON.stringify(component_data) : null,
+        selected_analysis_components ? JSON.stringify(selected_analysis_components) : null,
+        finalComponentInstances ? (typeof finalComponentInstances === 'string' ? finalComponentInstances : JSON.stringify(finalComponentInstances)) : null,
         new Date().toISOString(), 
         new Date().toISOString()
       ]
     );
 
     // 更新笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), notebook_id]);
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const updateQuery = `UPDATE notebooks SET note_count = note_count + 1, updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${notebook_id}'`;
+    await db.run(updateQuery);
 
     res.status(201).json({ 
       success: true, 
@@ -2007,6 +2291,9 @@ app.post('/api/notes', async (req, res) => {
         original_url: original_url || '',
         author: author || '',
         upload_time: upload_time || '',
+        component_data: component_data || {},
+        selected_analysis_components: selected_analysis_components || [],
+        component_instances: component_instances || [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -2026,7 +2313,12 @@ app.post('/api/note-rename', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Note id and title are required' });
     }
 
-    await db.run('UPDATE notes SET title = ?, updated_at = ? WHERE note_id = ?', [title, new Date().toISOString(), id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    await db.run(`UPDATE notes SET title = ?, updated_at = ? WHERE note_id = ${noteId}`, [title, new Date().toISOString()]);
 
     res.json({ 
       success: true, 
@@ -2051,7 +2343,10 @@ app.put('/api/notes/:id', async (req, res) => {
       author, 
       upload_time,
       image_urls,
-      images
+      images,
+      component_data,
+      selected_analysis_components,
+      component_instances
     } = req.body;
     
     if (!id) {
@@ -2099,6 +2394,23 @@ app.put('/api/notes/:id', async (req, res) => {
       updateFields.push('images = ?');
       updateValues.push(images);
     }
+    if (component_data !== undefined) {
+      updateFields.push('component_data = ?');
+      updateValues.push(component_data ? JSON.stringify(component_data) : null);
+    }
+    if (selected_analysis_components !== undefined) {
+      updateFields.push('selected_analysis_components = ?');
+      updateValues.push(selected_analysis_components ? JSON.stringify(selected_analysis_components) : null);
+    }
+    if (component_instances !== undefined) {
+      updateFields.push('component_instances = ?');
+      // 检查component_instances是否已经是字符串（JSON格式）
+      if (typeof component_instances === 'string') {
+        updateValues.push(component_instances);
+      } else {
+        updateValues.push(component_instances ? JSON.stringify(component_instances) : null);
+      }
+    }
     
     if (updateFields.length === 0) {
       return res.status(400).json({ success: false, message: 'No fields to update' });
@@ -2109,10 +2421,57 @@ app.put('/api/notes/:id', async (req, res) => {
     updateValues.push(new Date().toISOString());
     
     // 添加WHERE条件的id
-    updateValues.push(id);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
     
-    const sql = `UPDATE notes SET ${updateFields.join(', ')} WHERE note_id = ?`;
+    const sql = `UPDATE notes SET ${updateFields.join(', ')} WHERE note_id = ${noteId}`;
     await db.run(sql, updateValues);
+
+    // 如果更新了组件实例，检查是否需要反向同步到笔记本
+    if (component_instances !== undefined) {
+      console.log(`🔄 检查是否需要反向同步组件实例到笔记本...`);
+      
+      // 获取笔记的笔记本ID
+      const note = await db.get(`SELECT notebook_id FROM notes WHERE note_id = ${noteId}`);
+      if (note) {
+        console.log(`📚 笔记属于笔记本: ${note.notebook_id}`);
+        
+        // 获取笔记本的当前配置
+        const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [note.notebook_id]);
+        if (notebook && notebook.component_config) {
+          try {
+            const notebookConfig = JSON.parse(notebook.component_config);
+            
+            // 如果笔记本配置中有componentInstances，则更新它
+            if (notebookConfig.componentInstances) {
+              console.log(`🔄 反向同步组件实例到笔记本 ${note.notebook_id}`);
+              
+              // 解析笔记的组件实例
+              let noteComponentInstances = component_instances;
+              if (typeof component_instances === 'string') {
+                noteComponentInstances = JSON.parse(component_instances);
+              }
+              
+              // 更新笔记本配置中的组件实例
+              notebookConfig.componentInstances = noteComponentInstances;
+              
+              // 保存更新后的笔记本配置
+              const updatedConfigJson = JSON.stringify(notebookConfig);
+              const configJson = updatedConfigJson.replace(/'/g, "''");
+              const notebookUpdateQuery = `UPDATE notebooks SET component_config = '${configJson}', updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${note.notebook_id}'`;
+              await db.run(notebookUpdateQuery);
+              
+              console.log(`✅ 反向同步完成: 笔记本 ${note.notebook_id} 的组件实例已更新`);
+            }
+          } catch (e) {
+            console.error(`❌ 反向同步失败:`, e);
+          }
+        }
+      }
+    }
 
     res.json({ 
       success: true, 
@@ -2134,7 +2493,12 @@ app.post('/api/note-move', async (req, res) => {
     }
 
     // 获取笔记的当前笔记本ID
-    const note = await db.get('SELECT notebook_id FROM notes WHERE note_id = ?', [note_id]);
+    // 修复：验证note_id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(note_id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    const note = await db.get(`SELECT notebook_id FROM notes WHERE note_id = ${noteId}`);
     if (!note) {
       return res.status(404).json({ success: false, message: 'Note not found' });
     }
@@ -2142,13 +2506,17 @@ app.post('/api/note-move', async (req, res) => {
     const oldNotebookId = note.notebook_id;
 
     // 移动笔记
-    await db.run('UPDATE notes SET notebook_id = ?, updated_at = ? WHERE note_id = ?', [target_notebook_id, new Date().toISOString(), note_id]);
+    await db.run(`UPDATE notes SET notebook_id = ?, updated_at = ? WHERE note_id = ${noteId}`, [target_notebook_id, new Date().toISOString()]);
 
     // 更新原笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), oldNotebookId]);
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const updateQuery1 = `UPDATE notebooks SET note_count = note_count - 1, updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${oldNotebookId}'`;
+    await db.run(updateQuery1);
 
     // 更新目标笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count + 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), target_notebook_id]);
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const updateQuery2 = `UPDATE notebooks SET note_count = note_count + 1, updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${target_notebook_id}'`;
+    await db.run(updateQuery2);
 
     res.json({ 
       success: true, 
@@ -2170,16 +2538,23 @@ app.post('/api/note-delete', async (req, res) => {
     }
 
     // 获取笔记的笔记本ID
-    const note = await db.get('SELECT notebook_id FROM notes WHERE note_id = ?', [id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+    const note = await db.get(`SELECT notebook_id FROM notes WHERE note_id = ${noteId}`);
     if (!note) {
       return res.status(404).json({ success: false, message: 'Note not found' });
     }
 
     // 删除笔记
-    await db.run('DELETE FROM notes WHERE note_id = ?', [id]);
+    await db.run(`DELETE FROM notes WHERE note_id = ${noteId}`);
 
     // 更新笔记本的笔记数量
-    await db.run('UPDATE notebooks SET note_count = note_count - 1, updated_at = ? WHERE notebook_id = ?', [new Date().toISOString(), note.notebook_id]);
+    // 使用字符串拼接查询来避免Turso参数化查询问题
+    const updateQuery = `UPDATE notebooks SET note_count = note_count - 1, updated_at = '${new Date().toISOString()}' WHERE notebook_id = '${note.notebook_id}'`;
+    await db.run(updateQuery);
 
     res.json({ 
       success: true, 
@@ -2188,6 +2563,133 @@ app.post('/api/note-delete', async (req, res) => {
   } catch (error) {
     console.error('Error deleting note:', error);
     res.status(500).json({ success: false, message: 'Failed to delete note' });
+  }
+});
+
+// 获取单条笔记详情
+app.get('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Note id is required' });
+    }
+
+    // 验证id是有效整数
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid note id' });
+    }
+
+    // 获取笔记详情
+    const note = await db.get(`SELECT * FROM notes WHERE note_id = ${noteId}`);
+    if (!note) {
+      return res.status(404).json({ success: false, message: 'Note not found' });
+    }
+
+    // 获取笔记本信息
+    const notebook = await db.get('SELECT * FROM notebooks WHERE notebook_id = ?', [note.notebook_id]);
+
+    // 处理笔记数据
+    let parsedImages = [];
+    if (note.images) {
+      try {
+        if (typeof note.images === 'string') {
+          parsedImages = JSON.parse(note.images);
+        } else if (Array.isArray(note.images)) {
+          parsedImages = note.images;
+        }
+      } catch (e) {
+        console.error('解析图片数据失败:', e);
+        parsedImages = [];
+      }
+    }
+
+    // 解析组件数据
+    let parsedComponentData = {};
+    if (note.component_data) {
+      try {
+        parsedComponentData = JSON.parse(note.component_data);
+      } catch (e) {
+        console.error('解析组件数据失败:', e);
+        parsedComponentData = {};
+      }
+    }
+
+    // 解析组件实例 - 优先使用笔记的组件实例
+    let parsedComponentInstances = [];
+    if (note.component_instances) {
+      try {
+        let firstParse = JSON.parse(note.component_instances);
+        
+        if (typeof firstParse === 'string') {
+          parsedComponentInstances = JSON.parse(firstParse);
+        } else if (Array.isArray(firstParse)) {
+          parsedComponentInstances = firstParse;
+        } else {
+          parsedComponentInstances = [];
+        }
+        console.log(`📝 使用笔记的组件实例: ${parsedComponentInstances.length} 个`);
+      } catch (e) {
+        console.error('解析组件实例失败:', e);
+        parsedComponentInstances = [];
+      }
+    } else {
+      // 如果笔记没有组件实例，尝试从笔记本配置中获取
+      console.log(`📝 笔记没有组件实例，尝试从笔记本配置获取...`);
+      if (notebook && notebook.component_config) {
+        try {
+          const notebookConfig = JSON.parse(notebook.component_config);
+          if (notebookConfig.componentInstances) {
+            parsedComponentInstances = notebookConfig.componentInstances;
+            console.log(`📚 从笔记本配置获取组件实例: ${parsedComponentInstances.length} 个`);
+          }
+        } catch (e) {
+          console.error('从笔记本配置获取组件实例失败:', e);
+        }
+      }
+    }
+
+    // 解析笔记本组件配置
+    let parsedNotebookComponentConfig = null;
+    if (notebook && notebook.component_config) {
+      try {
+        parsedNotebookComponentConfig = JSON.parse(notebook.component_config);
+      } catch (e) {
+        console.error('解析笔记本组件配置失败:', e);
+        parsedNotebookComponentConfig = null;
+      }
+    }
+
+    const enrichedNote = {
+      ...note,
+      content_text: note.content_text || note.content || '',
+      images: parsedImages,
+      image_urls: note.image_urls || null,
+      source_url: note.source_url || '',
+      core_points: note.core_points || '',
+      keywords: note.keywords || '',
+      knowledge_extension: note.knowledge_extension || '',
+      learning_path: note.learning_path || '',
+      ai_chat_summary: note.ai_chat_summary || '',
+      component_data: parsedComponentData,
+      component_instances: parsedComponentInstances
+    };
+
+    const enrichedNotebook = {
+      ...notebook,
+      component_config: parsedNotebookComponentConfig
+    };
+
+    res.json({
+      success: true,
+      note: enrichedNote,
+      notebook: enrichedNotebook
+    });
+
+  } catch (error) {
+    console.error('获取笔记详情失败:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch note details', error: error.message });
   }
 });
 
@@ -2204,7 +2706,12 @@ app.get('/api/note-detail-data', async (req, res) => {
 
     // 获取笔记详情
     console.log('📝 Querying note with id:', id);
-    const note = await db.get('SELECT * FROM notes WHERE note_id = ?', [id]);
+    // 修复：验证id是有效整数，然后使用字符串拼接查询（libsql参数化查询有bug）
+    const noteId = parseInt(id, 10);
+    if (isNaN(noteId) || noteId <= 0) {
+      return res.status(400).json({ error: 'Invalid note id' });
+    }
+    const note = await db.get(`SELECT * FROM notes WHERE note_id = ${noteId}`);
     console.log('📝 Note query result:', note ? 'found' : 'not found');
     
     if (!note) {
@@ -2233,6 +2740,52 @@ app.get('/api/note-detail-data', async (req, res) => {
       }
     }
 
+    // 解析组件数据
+    let parsedComponentData = {};
+    if (note.component_data) {
+      try {
+        parsedComponentData = JSON.parse(note.component_data);
+      } catch (e) {
+        console.error('解析组件数据失败:', e);
+        parsedComponentData = {};
+      }
+    }
+
+    // 解析组件实例
+    let parsedComponentInstances = [];
+    if (note.component_instances) {
+      try {
+        let firstParse = JSON.parse(note.component_instances);
+        
+        // 检查是否被双重编码（第一次解析后仍然是字符串）
+        if (typeof firstParse === 'string') {
+          console.log('检测到双重编码的组件实例数据，进行第二次解析');
+          parsedComponentInstances = JSON.parse(firstParse);
+        } else if (Array.isArray(firstParse)) {
+          parsedComponentInstances = firstParse;
+        } else {
+          console.warn('组件实例数据格式异常:', typeof firstParse);
+          parsedComponentInstances = [];
+        }
+        
+        console.log(`成功解析组件实例，数量: ${parsedComponentInstances.length}`);
+      } catch (e) {
+        console.error('解析组件实例失败:', e);
+        parsedComponentInstances = [];
+      }
+    }
+
+    // 解析笔记本组件配置
+    let parsedNotebookComponentConfig = null;
+    if (notebook && notebook.component_config) {
+      try {
+        parsedNotebookComponentConfig = JSON.parse(notebook.component_config);
+      } catch (e) {
+        console.error('解析笔记本组件配置失败:', e);
+        parsedNotebookComponentConfig = null;
+      }
+    }
+
     const enrichedNote = {
       ...note,
       content_text: note.content_text || note.content || '',
@@ -2243,7 +2796,14 @@ app.get('/api/note-detail-data', async (req, res) => {
       keywords: note.keywords || '',
       knowledge_extension: note.knowledge_extension || '',
       learning_path: note.learning_path || '',
-      ai_chat_summary: note.ai_chat_summary || ''
+      ai_chat_summary: note.ai_chat_summary || '',
+      component_data: parsedComponentData,
+      component_instances: parsedComponentInstances
+    };
+
+    const enrichedNotebook = {
+      ...notebook,
+      component_config: parsedNotebookComponentConfig
     };
 
     console.log(`✅ 成功获取笔记详情: ${enrichedNote.title}`);
@@ -2251,7 +2811,7 @@ app.get('/api/note-detail-data', async (req, res) => {
     res.json({
       success: true,
       note: enrichedNote,
-      notebook: notebook
+      notebook: enrichedNotebook
     });
 
   } catch (error) {
