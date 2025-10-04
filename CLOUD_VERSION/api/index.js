@@ -225,6 +225,204 @@ module.exports = async (req, res) => {
       
       return sendSuccess(res, stats[0] || {}, '仪表板数据获取成功');
 
+    } else if (path === '/api/notebooks' && method === 'GET') {
+      // 获取所有笔记本
+      const notebooks = await query(`
+        SELECT 
+          notebook_id,
+          name,
+          (SELECT COUNT(*) FROM notes WHERE notebook_id = notebooks.notebook_id) as note_count,
+          created_at,
+          updated_at
+        FROM notebooks 
+        ORDER BY created_at DESC
+      `);
+      
+      return sendSuccess(res, { notebooks }, '笔记本列表获取成功');
+
+    } else if (path === '/api/notebooks' && method === 'POST') {
+      // 创建新笔记本
+      const { name } = req.body;
+      
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'NAME_REQUIRED', message: '笔记本名称不能为空' });
+      }
+      
+      const result = await insert('notebooks', {
+        notebook_id: `notebook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: name.trim(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+      return sendSuccess(res, { id: result.lastInsertRowid }, '笔记本创建成功');
+
+    } else if (path === '/api/notebook-rename' && method === 'POST') {
+      // 重命名笔记本
+      const { id, name } = req.body;
+      
+      if (!id || !name || !name.trim()) {
+        return res.status(400).json({ error: 'INVALID_PARAMS', message: '参数无效' });
+      }
+      
+      await update('notebooks', { name: name.trim(), updated_at: new Date().toISOString() }, { notebook_id: id });
+      
+      return sendSuccess(res, {}, '笔记本重命名成功');
+
+    } else if (path === '/api/notebook-delete' && method === 'POST') {
+      // 删除笔记本
+      const { id } = req.body;
+      
+      if (!id) {
+        return res.status(400).json({ error: 'ID_REQUIRED', message: '笔记本ID不能为空' });
+      }
+      
+      // 先删除笔记本下的所有笔记
+      await query('DELETE FROM notes WHERE notebook_id = ?', [id]);
+      // 再删除笔记本
+      await query('DELETE FROM notebooks WHERE notebook_id = ?', [id]);
+      
+      return sendSuccess(res, {}, '笔记本删除成功');
+
+    } else if (path === '/api/notes' && method === 'GET') {
+      // 获取指定笔记本的笔记列表
+      const { notebook_id } = req.query;
+      
+      if (!notebook_id) {
+        return res.status(400).json({ error: 'NOTEBOOK_ID_REQUIRED', message: '笔记本ID不能为空' });
+      }
+      
+      // 获取笔记本信息
+      const notebook = await query(`
+        SELECT 
+          notebook_id,
+          name,
+          description,
+          created_at,
+          updated_at,
+          component_config
+        FROM notebooks 
+        WHERE notebook_id = ?
+      `, [notebook_id]);
+      
+      if (notebook.length === 0) {
+        return res.status(404).json({ error: 'NOTEBOOK_NOT_FOUND', message: '笔记本不存在' });
+      }
+      
+      // 获取笔记列表
+      const notes = await query(`
+        SELECT 
+          note_id,
+          title,
+          content,
+          created_at,
+          updated_at,
+          source_url
+        FROM notes 
+        WHERE notebook_id = ? 
+        ORDER BY updated_at DESC
+      `, [notebook_id]);
+      
+      // 计算笔记数量
+      const noteCount = notes.length;
+      const notebookWithCount = {
+        ...notebook[0],
+        note_count: noteCount
+      };
+      
+      return sendSuccess(res, { notebook: notebookWithCount, notes }, '笔记列表获取成功');
+
+    } else if (path === '/api/notes' && method === 'POST') {
+      // 创建新笔记
+      const { notebook_id, title, content, source_url } = req.body;
+      
+      if (!notebook_id || !title || !content) {
+        return res.status(400).json({ error: 'REQUIRED_FIELDS_MISSING', message: '必填字段不能为空' });
+      }
+      
+      const result = await insert('notes', {
+        note_id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        notebook_id,
+        title: title.trim(),
+        content: content.trim(),
+        source_url: source_url || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+      return sendSuccess(res, { id: result.lastInsertRowid }, '笔记创建成功');
+
+    } else if (path === '/api/note' && method === 'GET') {
+      // 获取单个笔记详情
+      const { note_id } = req.query;
+      
+      if (!note_id) {
+        return res.status(400).json({ error: 'NOTE_ID_REQUIRED', message: '笔记ID不能为空' });
+      }
+      
+      const notes = await query(`
+        SELECT 
+          note_id,
+          notebook_id,
+          title,
+          content,
+          created_at,
+          updated_at,
+          source_url
+        FROM notes 
+        WHERE note_id = ?
+      `, [note_id]);
+      
+      if (notes.length === 0) {
+        return res.status(404).json({ error: 'NOTE_NOT_FOUND', message: '笔记不存在' });
+      }
+      
+      return sendSuccess(res, { note: notes[0] }, '笔记详情获取成功');
+
+    } else if (path === '/api/note' && method === 'PUT') {
+      // 更新笔记
+      const { note_id, title, content, source_url } = req.body;
+      
+      if (!note_id || !title || !content) {
+        return res.status(400).json({ error: 'REQUIRED_FIELDS_MISSING', message: '必填字段不能为空' });
+      }
+      
+      await update('notes', { 
+        title: title.trim(), 
+        content: content.trim(),
+        source_url: source_url || null,
+        updated_at: new Date().toISOString() 
+      }, { note_id });
+      
+      return sendSuccess(res, {}, '笔记更新成功');
+
+    } else if (path === '/api/note-delete' && method === 'POST') {
+      // 删除笔记
+      const { note_id } = req.body;
+      
+      if (!note_id) {
+        return res.status(400).json({ error: 'NOTE_ID_REQUIRED', message: '笔记ID不能为空' });
+      }
+      
+      await query('DELETE FROM notes WHERE note_id = ?', [note_id]);
+      
+      return sendSuccess(res, {}, '笔记删除成功');
+
+    } else if (path === '/api/note-move' && method === 'POST') {
+      // 移动笔记到其他笔记本
+      const { note_id, target_notebook_id } = req.body;
+      
+      if (!note_id || !target_notebook_id) {
+        return res.status(400).json({ error: 'REQUIRED_FIELDS_MISSING', message: '必填字段不能为空' });
+      }
+      
+      await update('notes', { 
+        notebook_id: target_notebook_id,
+        updated_at: new Date().toISOString() 
+      }, { note_id });
+      
+      return sendSuccess(res, {}, '笔记移动成功');
+
     } else if (path === '/api/health' && method === 'GET') {
       // 健康检查端点
       return sendSuccess(res, { 

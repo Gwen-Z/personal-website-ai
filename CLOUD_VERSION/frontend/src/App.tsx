@@ -1598,7 +1598,7 @@ function AnalyticsTabsPage() {
   const fetchNotebooks = useCallback(async () => {
     try {
       console.log('🔄 Fetching notebooks...');
-      console.log('🔄 API_BASE_URL:', process.env.REACT_APP_API_URL || 'http://localhost:3001');
+      console.log('🔄 API_BASE_URL:', process.env.REACT_APP_API_URL || '');
       
       // 使用代理路径
       const response = await fetch('/api/notebooks');
@@ -1867,7 +1867,7 @@ function AnalyticsTabsPage() {
               <div className="text-sm text-gray-500 px-3 py-2">
                 暂无笔记本 (调试: notebooks.length = {notebooks.length}, notesOpen = {notesOpen.toString()})
                 <br />
-                <small>API URL: {process.env.REACT_APP_API_URL || 'http://localhost:3001'}</small>
+                <small>API URL: {process.env.REACT_APP_API_URL || '/api'}</small>
               </div>
             ) : (
               notebooks.map(notebook => (

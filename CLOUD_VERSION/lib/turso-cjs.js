@@ -63,6 +63,32 @@ async function initializeTables() {
       )
     `);
 
+    // 创建 notebooks 表
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS notebooks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        notebook_id TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 创建 notes 表
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        note_id TEXT UNIQUE NOT NULL,
+        notebook_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        source_url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (notebook_id) REFERENCES notebooks(notebook_id)
+      )
+    `);
+
     console.log('数据库表初始化完成');
   } catch (error) {
     console.error('数据库初始化失败:', error);

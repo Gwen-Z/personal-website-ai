@@ -1,4 +1,5 @@
-const { initializeTables, query, insert, selectAll, update, turso as getTursoClient } = require('../lib/turso-cjs.js');
+const { initializeTables, query, insert, selectAll, update, turso } = require('../lib/turso-cjs.js');
+const getTursoClient = turso;
 
 // 初始化数据库
 let dbInitialized = false;
